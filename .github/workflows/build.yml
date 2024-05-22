@@ -3,7 +3,7 @@ run-name: ${{github.actor}} pushed new code to ${{github.repository}}, building.
 on:
   push:
     branches:
-      - main
+      - origin
 jobs:
   build:
     runs-on: ubuntu-latest
