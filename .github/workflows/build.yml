@@ -9,11 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build the project
-        uses: haskell-actions/setup
+      - uses: haskell-actions/setup
         with:
           enable-stack: true
           stack-setup-ghc: true
+      - name: Build the project 
         run: |
           stack build
       
