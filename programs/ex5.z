@@ -1,0 +1,2 @@
+Lazy<Int> x := 5;
+Int y := 5
