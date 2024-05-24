@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
+module Typecheck where
+  
+{- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeApplications #-}
@@ -9,6 +11,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 module Typecheck where
 
 
@@ -25,6 +29,8 @@ import Data.Typeable (heqT,eqT)
 import ADT (ADTContext)
 import ShowM
 import Data.String (IsString(..))
+import Lensy 
+import Action (ShowMContext)
 
 type Gamma  = Map A.Symbol P.Type
 type Gamma' = Map A.Symbol SomeTypeRep
@@ -35,7 +41,8 @@ data Errors
 newtype Actions t = Actions { runActions :: [P.A0 t] }
 
 class TypeVars f where
-  typeVars :: (MonadError Errors m, MonadReader Gamma m) => f P.NoVarInfo -> m (f P.VarInfo)
+  typeVars :: 
+    (MonadError Errors m, MonadReader Gamma m) => f P.NoVarInfo -> m (f P.VarInfo)
 
 instance TypeVars P.Atom where
   typeVars (P.Var x _) = asks (M.lookup x) >>= \case
@@ -130,46 +137,87 @@ instance
     upcast e@(A.Closure {}) = A.Defer e
     upcast e@(A.Defer   {}) = A.Defer e -}
 
+class TypeOfP f where
+  typeOfP :: 
+    (MonadError Errors m) => f P.VarInfo -> m [SomeTypeRep]
+
+instance TypeOfP P.Expr where
+  typeOfP (P.Minus _ _)= pure 
+    [ SomeTypeRep $ TypeRep @(A.Value Int)
+    , SomeTypeRep $ TypeRep @(A.Value Int)
+    , SomeTypeRep $ TypeRep @(A.Value Int)
+    ]
+  typeOfP (P.Less _ _)= pure 
+    [ SomeTypeRep $ TypeRep @(A.Value Int)
+    , SomeTypeRep $ TypeRep @(A.Value Int)
+    , SomeTypeRep $ TypeRep @(A.Value Int)
+    ]
+  typeOfP (P.OfTerm t) = typeOfP t
+
+instance TypeOfP P.Term where
+  typeOfP (P.App f x) = do
+    f' <- typeOfP f
+    x' <- typeOfP x
+    pure $ f' ++ x'
+  typeOfP (P.OfAtom x) = typeOfP x
+
+instance TypeOfP P.Atom where
+  typeOfP (P.Val {}) = pure [SomeTypeRep $ TypeRep @(A.Value Int)]
+  typeOfP (P.Var _ (Identity tr)) =  pure [typeMap tr]
+  typeOfP (P.Parens e) = typeOfP e
+  typeOfP (P.Defer e) = typeOfP e
+  typeOfP _ = undefined
+
 class TypecheckE f where
-  typecheckE :: 
+  typecheckE :: forall m' a env m.
     ( MonadError Errors m
     , MonadReader Gamma' m
-    ) => f P.VarInfo -> m (A.E env m a)
+    , ADTContext m' env
+    , Typeable a
+    , ShowMContext m' env
+    , forall x. IsString (LensyM' m' env (A.E env m' x))
+    ) => TypeRep a -> f P.VarInfo -> m (A.E env m' a)
 
+instance TypecheckE P.Expr where
+  typecheckE :: forall m' a env m.
+    ( MonadError Errors m
+    , MonadReader Gamma' m
+    , ADTContext m' env
+    , Typeable a
+    , ShowMContext m' env
+    , forall x. IsString (LensyM' m' env (A.E env m' x))
+    ) => TypeRep a -> P.Expr P.VarInfo -> m (A.E env m' a)
+  typecheckE _ (P.Minus el er) = do 
+    el' <- typecheckE @_ @m' (typeRep @(A.Value Int)) el
+    er' <- typecheckE @_ @m' (typeRep @(A.Value Int)) er
+    case eqT @a @(A.Value Int) of
+      Just Refl -> pure $ A.Minus el' er'
+      Nothing -> error "Type mismatch"
+    
+  typecheckE _ (P.Less el er) = do 
+    el' <- typecheckE @_ @m' (typeRep @(A.Value Int)) el
+    er' <- typecheckE @_ @m' (typeRep @(A.Value Int)) er
+    case eqT @a @(A.Value Int) of
+      Just Refl -> pure $ A.Minus el' er'
+      Nothing -> error "Type mismatch"
+  typecheckE tr (P.OfTerm t) = typecheckE tr t
 
-
+instance TypecheckE P.Term where
+  typecheckE :: forall m' a env m.
+    ( MonadError Errors m
+    , MonadReader Gamma' m
+    , ADTContext m' env
+    , Typeable a
+    , ShowMContext m' env
+    , forall x. IsString (LensyM' m' env (A.E env m' x))
+    ) => TypeRep a -> P.Term P.VarInfo -> m (A.E env m' a)
+  typecheckE _ (P.App f x) = do
+    
+    undefined
+  typecheckE tr (P.OfAtom a) = typecheckE tr a
 
 instance TypecheckE P.Atom where
-  typecheckE ::  forall m env a.
-    ( MonadError Errors m, MonadReader Gamma' m
-    )
-    => P.Atom P.VarInfo -> m (A.E env m a)
-  typecheckE (P.Val x) = case eqT @a @(A.Value Int) of
-    Just Refl -> pure $ A.Val x
-    Nothing   -> undefined
-  typecheckE (P.Var x (Identity t)) = asks (M.lookup x) >>= \case
-    Just (SomeTypeRep @k _) -> case typeMap t of
-      SomeTypeRep @k' _ -> case (eqT @k @k', eqT @k @a) of
-        (Just Refl, Just Refl) -> pure $ A.Var @k (fromString x)
-        _ -> throwError $ TypeMismatch t undefined
-    Nothing -> throwError $ UnboundVariable x
-  typecheckE (P.Parens x) = typecheckE x
-  typecheckE (P.Defer x) = do 
-    te :: A.E env m (A.Lazy a') <- A.Defer <$> typecheckE x 
-    case eqT @a @(A.Lazy a') of
-      Just Refl -> pure te
-      Nothing -> undefined
-  typecheckE (P.IfThenElse c t f) = do
-    tc :: A.E env m x0 <- typecheckE c
-    tt :: A.E env m x1 <- typecheckE t
-    tf :: A.E env m x2 <- typecheckE f
-    let te = A.If @(RValuable x1) @(RValuable x2) @x1 @x2 @x0 @_ @env @m tc tt tf
-    undefined
-    {- case eqT @a @(A.Lazy a) of
-      Just Refl -> pure te
-      Nothing -> undefined -}
-  typecheckE (P.Formula e) = P.Formula <$> typecheckE e
-  typecheckE (P.Lambda s t e) = P.Lambda s t <$> local (M.insert s t) (typecheckE e)
+  typecheckE = undefined
 
 type family RValuable (a :: Type) :: Type where
   RValuable (A.Value a) = A.Value a
@@ -177,3 +225,4 @@ type family RValuable (a :: Type) :: Type where
   RValuable (A.Lazy (A.Lazy a)) = A.Lazy a
 
 
+ -}

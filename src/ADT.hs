@@ -75,7 +75,10 @@ type ADTContext m env =
   , Alternative m
   )
 
-
+type ShowMContextE m env =
+  ( ShowM m env
+  , forall a. ShowM m (E env m a)
+  )
 
 type Symbol = String
 
@@ -171,7 +174,9 @@ data  E (env :: Type) (m :: Type -> Type) (a :: Type) where
     , Typeable a
     , ShowM m (E env m (Value (a -> c)))
     )
-    => LensyM' m env (E env m a) -> E env m b -> E env m (Value (a -> c))
+    => LensyM' m env (E env m a) 
+    -> E env m b 
+    -> E env m (Value (a -> c))
   LambdaC ::
     ( RValue m (E env m b) (E env m c)
     , ShowM m (E env m b)
@@ -200,6 +205,16 @@ data  E (env :: Type) (m :: Type -> Type) (a :: Type) where
     , ShowM m env
     )
     => E env m a -> E env m (Lazy a)
+  Formula :: 
+    (
+
+    ) => LensyM' m env (E env m a) -> E env m (Lazy a)
+  FEval ::
+    ( BaseType a ~ Value b
+    , RValue m (E env m a) (E env m c)
+    , ForceEvaluation a
+    , ForceEvaluation (Value b)
+    ) => E env m a -> E env m (Value b) 
   Closure ::
     ( ShowM m (E env m  a)
     , ShowM m env
@@ -210,9 +225,37 @@ data  E (env :: Type) (m :: Type -> Type) (a :: Type) where
     , ShowM m (E env m (Value a))
     ) 
     => (E env m (Value a), env) -> E env m (Value a)
+  DeferS :: forall a c env m b.
+    ( RValue m (E env m a) (E env m c)
+    , HasBaseType (E env m a)
+    , BaseType a ~ b
+    , ShowM m (E env m a)
+    , ShowM m env
+    --, ForceEvaluation c
+    )
+    => E env m a -> E env m (LazyS b) 
 
 deriving instance Typeable (E env m a)
 
+class HasBaseType (a :: Type) where
+  type BT a :: Type
+
+
+instance HasBaseType (E env m (Value a)) where
+  type BT (E env m (Value a)) = BaseType (Value a)
+instance HasBaseType (E env m  (Lazy a)) where
+  type BT (E env m (Lazy a)) = BaseType (Lazy a)
+instance HasBaseType (E env m  (LazyS a)) where
+  type BT (E env m (LazyS a)) = BaseType (LazyS a)
+
+class (RValue m a b, HasBaseType a) 
+  => RVPreservesBT m a b | a -> m b where
+  rvaluePreservesBT :: 
+    ( BaseType a ~ c
+    ) => ((BaseType b ~ c, RVPreservesBT m b d) => r) -> r
+
+instance (RValue m a b, HasBaseType a) => RVPreservesBT m a b where
+  rvaluePreservesBT = undefined
 
 --------------------------
 -- Aux type families
@@ -277,7 +320,7 @@ labsortion'
 
 instance
   ( ADTContext m env
-  , ShowM m (E env m (Value Int))
+  , ShowMContextE m env
 
   ) =>  RValue m 
     (E env m (Value a)) 
@@ -306,11 +349,13 @@ instance
     let f arg = localM (setyMF' x arg . const gamma) $ rvalue t
     pure $ LambdaC f (gamma,x,t)
   rvalue (Closure (e,gamma)) = localM (pure . const gamma) $ rvalue e
+  rvalue (FEval e) = forceEvaluation e
+  
 
 -- | Lazy <a> are reduced to a
 instance
   ( ADTContext m env
-  , ShowM m (E env m (Value Int))
+  , ShowMContextE m env
   )
   => RValue m 
     (E env m (Lazy (Value a))) 
@@ -328,13 +373,12 @@ instance
   rvalue (Closure (e,gamma)) = localM (pure . const gamma) $ rvalue e
   rvalue x@(Var {}) = genRVar x
   rvalue e@(If {})  = genRVIf e
+  rvalue (Formula v) = cvalue v
 
 
 instance
   ( ADTContext m env
-  , ShowM m (E env m (Value Int))
-  , ShowM m (E env m a)
-  , ShowM m (E env m (Lazy a))
+  , ShowMContextE m env
   )
   => RValue m 
     (E env m (Lazy (Lazy a))) 
@@ -348,6 +392,19 @@ instance
   rvalue (Closure (e :: E env m (Lazy (Lazy a)), gamma)) = do 
     e' <- localM (pure . const gamma) $ rvalue e
     pure $ Closure (e',gamma)
+  rvalue (Formula v) = cvalue v
+
+instance
+  ( ADTContext m env
+  , ShowMContextE m env
+  )
+  => RValue m 
+    (E env m (LazyS a)) 
+    (E env m (LazyS a)) where 
+  {- rvalue (DeferS @a' @c @_ @_ @b v) = rvaluePreservesBT @m @(E env m a') 
+    $ DeferS <$> rvalue v
+  rvalue (Var x) = rvalue <=< cvalue $ x
+  rvalue _ = undefined -}
 ------------------------------
 -- Generic R-Value Functions
 ------------------------------
@@ -359,8 +416,8 @@ genRVar _ = undefined
 
 genRVIf ::forall m env a b.
   ( ADTContext m env
+  , ShowMContextE m env
   , RValue m (E env m a) b
-  , ShowM m (E env m (Value Int))
   )
   => E env m a -> m b
 genRVIf (If @c0 @c1 cond t f) = rvalue cond >>= \case
@@ -385,6 +442,59 @@ instance (Applicative m, Typeable m, Typeable env,  Typeable (Value a))
   => Cast m env (E env m (Value a)) (E env m (Value a)) where
   cast = pure . reflexivity
 
+
+--------------------------
+-- FEval 
+--------------------------
+
+class ForceEvaluation a where
+  forceEvaluation :: 
+    ( ADTContext m env
+    , ShowMContextE m env
+    , BaseType a ~ b
+    ) => E env m a -> m (E env m b)
+
+instance ForceEvaluation (Value Int) where
+  forceEvaluation (Val n)        = pure $ Val n
+  forceEvaluation (Var x)        = forceEvaluation <=< cvalue $ x
+  forceEvaluation e@(Minus {})   = pure e
+  forceEvaluation e@(Less {})    = pure e
+  forceEvaluation e@(If {})      = forceEvaluation <=< genRVIf $ e
+  forceEvaluation e@(App {})     = forceEvaluation <=< rvalue $ e
+  forceEvaluation e@(FEval _)    = forceEvaluation <=< rvalue $ e
+  forceEvaluation e@(Closure {}) = forceEvaluation <=< rvalue $ e
+  forceEvaluation e@(ValueC {})  = forceEvaluation <=< rvalue $ e
+
+instance ForceEvaluation (Lazy (Value Int)) where
+
+  forceEvaluation (Formula v)    = forceEvaluation <=< cvalue $ v
+  forceEvaluation (Var x)        = forceEvaluation <=< cvalue $ x
+  forceEvaluation e@(If {})      = forceEvaluation <=< genRVIf $ e
+  forceEvaluation e@(App {})     = forceEvaluation <=< rvalue $ e
+  forceEvaluation e@(Closure {}) = forceEvaluation <=< rvalue $ e
+  forceEvaluation (Defer v)      = forceEvaluation v
+  
+
+instance ForceEvaluation (Lazy a) => ForceEvaluation (Lazy (Lazy a)) where
+  forceEvaluation (Formula v)    = forceEvaluation <=< cvalue $ v
+  forceEvaluation (Var x)        = forceEvaluation <=< cvalue $ x
+  forceEvaluation e@(If {})      = forceEvaluation <=< genRVIf $ e
+  forceEvaluation e@(App {})     = forceEvaluation <=< rvalue $ e
+  forceEvaluation e@(Closure {}) = forceEvaluation <=< rvalue $ e
+  forceEvaluation (Defer v)      = forceEvaluation v
+
+
+instance ForceEvaluation (LazyS a) where
+  {- forceEvaluation (DeferS @_ @c @_ @_ @b v)     = do
+    v' <- rvalue v
+    case eqT @(BaseType c) @b of
+      Nothing -> undefined
+      Just Refl -> forceEvaluation  v' -}
+  forceEvaluation (Var x)        = forceEvaluation <=< cvalue $ x
+  forceEvaluation e@(If {})      = forceEvaluation <=< genRVIf $ e
+  forceEvaluation e@(App {})     = forceEvaluation <=< rvalue $ e
+  forceEvaluation e@(Closure {}) = forceEvaluation <=< rvalue $ e
+ 
 --------------------------
 -- Num Instance
 --------------------------

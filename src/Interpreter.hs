@@ -57,6 +57,7 @@ instance ShowM BaseInterpreter (E Env BaseInterpreter a) where
     App f a -> showParenM (p > 10) $ showsPrecM 10 f <=< showCharM ' ' <=< showsPrecM 11 a
     Defer v -> showStringM "'" <=< showsPrecM 11 v <=< showStringM "'"
     Closure (e,env) -> showCharM '<' <=< showsPrecM 10 e <=< showStringM  ", " <=< showsPrecM 10 env <=< showCharM '>'
+    Formula e -> showStringM "Formula " <=< (showsPrecM 11 . UT . varNameM') e
 
 instance ShowM BaseInterpreter (A Env BaseInterpreter a) where 
   showsPrecM p = \case
