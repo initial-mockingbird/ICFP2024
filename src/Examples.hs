@@ -143,8 +143,7 @@ add = Lambda "x" $ Lambda "y" $ Minus
     negatedY :: E Env m (Value Int)
     negatedY = App (negate' @m) (Var @(Value Int) "y")
 
-infixr 0 ~>
-type (~>) a b = Value (a -> b)
+
 
 ax3 :: 
   ( ADTContext   m Env

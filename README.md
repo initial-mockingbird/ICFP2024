@@ -1,6 +1,5 @@
 # ICFP2024
 
-This readme contains information about the project structure.
+On the `/semantics` you'll find the complete BNF Grammar, Typing Judgments and Operational semantics of Zilly.
 
-- On `/semantics` you'll find the complete BNF Grammar, Typing Judgements and Operational semantics of Zilly.
-- 
+In order to test the artefact, add more examples to `test/Spec.hs` and run `stack test`.

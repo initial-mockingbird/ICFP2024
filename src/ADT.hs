@@ -82,6 +82,9 @@ type ShowMContextE m env =
 
 type Symbol = String
 
+infixr 0 ~>
+type (~>) a b = Value (a -> b)
+
 --------------------------
 -- Classes
 --------------------------
