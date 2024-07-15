@@ -9,6 +9,11 @@ newtype UnquotedText = UT String
 instance Show UnquotedText where
   show (UT s) = s
 
+newtype I a = I { unI :: a }
+
+instance Functor I where
+  fmap f (I x) = I (f x)
+
 
 type ShowSM m = String -> m String
 
@@ -40,3 +45,7 @@ instance Applicative f => ShowM f Int where
 
 instance Applicative f => ShowM f UnquotedText where
   showM (UT s) = pure s
+
+  
+instance Show a => ShowM I a where
+  showM = I . show  

@@ -1,4 +1,4 @@
-module Lensy where
+module Lensy2 where
 
 
 data LensyM' m s a = LensyM'

@@ -25,6 +25,7 @@ dependencies:
 - mtl
 - singletons
 - singletons-th
+- singletons-base
 - lens 
 - distributive
 - parsec

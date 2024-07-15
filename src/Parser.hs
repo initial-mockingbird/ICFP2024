@@ -20,6 +20,7 @@ module Parser
   , VarInfo
   , parseAction
   , parseFile
+  , parseExpr
   ) where
 
 {-
@@ -36,7 +37,6 @@ import Text.Parsec.String
 import Text.Parsec.Combinator
 import Data.String (IsString(..))
 import Control.Monad
-import Action (A)
 import Control.Applicative ((<**>))
 import Data.Functor.Const
 
@@ -128,6 +128,7 @@ quoted = lexeme . between (token $ string "'") (token $ string "'")
 
 bracketed :: Parser a -> Parser a
 bracketed = lexeme . between (char '<') (char '>')
+
 ---------------------------------------------
 -- Fixity, Associativity and Precedence
 ---------------------------------------------
@@ -209,7 +210,8 @@ deriving instance Show (t Type) => Show (Expr t)
 deriving instance Eq (t Type) => Eq (Expr t)
 
 data Term t
-  = App (Term t) (Atom t)
+  -- = App (Term t) (Atom t)
+  = App (Term t) (Expr t)
   | OfAtom (Atom t)
 deriving instance Show (t Type) => Show (Term t)
 deriving instance Eq (t Type) => Eq (Term t)
@@ -257,7 +259,7 @@ pType = precedence $
 -----------------------------------------
 
 number :: Parser Int
-number = f <$> option "" (token $ string "-" ) <*> many1 digit
+number = f <$> option "" (token $ string "-" ) <*> lexeme (many1 digit)
   where f "-" ds = read ('-':ds)
         f _   ds = read ds
 
@@ -281,8 +283,9 @@ atom
 
 expr :: Parser (Expr NoVarInfo)
 expr = precedence $
-  sops InfixL [Minus <$ char '-', Less <$ char '<'] |-<
-  sops Postfix [flip App <$> parens atom] |-<
+  sops InfixL [Minus <$ lexeme (char '-'), Less <$ lexeme (char '<')] |-<
+  --sops Postfix [flip App <$> parens atom] |-<
+  sops Postfix [flip App <$> parens expr] |-<
   Atom atom
 
 
@@ -329,3 +332,6 @@ parseAction = parse (fully action) ""
 parseFile :: FilePath -> IO (Either ParseError [A0 NoVarInfo])
 parseFile = fmap (traverse parseAction . lines) . readFile
 
+
+parseExpr :: String -> Either ParseError (Expr NoVarInfo)
+parseExpr = parse (fully expr) ""
