@@ -7,6 +7,19 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE PolyKinds #-}
+
+{-|
+Module      : Parser
+Description : A Parser for Zilly
+Copyright   : (c) Daniel Pinto, 2024
+                  Enzo Alda, 2024
+License     : GPL-3
+Maintainer  : daniel.andres.pinto@gmail.com
+Stability   : experimental
+Portability : POSIX
+
+A Parser for Zilly
+-}
 module Parser 
   ( Type (..)
   , Type0 (..)
@@ -23,14 +36,7 @@ module Parser
   , parseExpr
   ) where
 
-{-
-Based on 
 
-Design Patterns for Parser Combinators (Functional Pearl)
-
-ACM ISBN 978-1-4503-8615-9/21/08.
-https://doi.org/10.1145/3471874.3472984
--}
 
 import Text.Parsec hiding (token)
 import Text.Parsec.String

@@ -473,13 +473,6 @@ instance SingI a => RValue (Lazy (Value a)) where
       t'  <- localM (setyMF' x arg . const gamma) $ rvalue t
       gamma' <- setyMF' x arg gamma
       pure $ Closure (t',gamma')
-      
-      {- rvalue f >>= \case
-    LambdaC _ (gamma, x, t) -> do
-      arg <-  rvalue a
-      t'  <- localM (setyMF' x arg . const gamma) $ rvalue t
-      gamma' <- setyMF' x arg gamma
-      rvalue $ Closure (t',gamma') -}
     f' ->  rvalue $ App f' a
   rvalue (Closure (e,gamma)) = localM (pure . const gamma) $ rvalue e
   rvalue x@(Var {}) = genRVar x

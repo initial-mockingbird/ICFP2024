@@ -33,12 +33,24 @@ library
       Interpreter2
       Lensy2
       Parser
+      Parser.ParserZ
       Parser.Utilities
+      Parser.ZillyParser
       ParserM2
       ParserZ
       ShowM
       TypedMap2
-      ZT
+      Utilities.LensM
+      Utilities.ShowM
+      Utilities.TypedMap
+      Zilly.Action
+      Zilly.ADT
+      Zilly.Contexts
+      Zilly.Expressions
+      Zilly.Interpreter
+      Zilly.RValue
+      Zilly.TypeCheck
+      Zilly.Types
   other-modules:
       Paths_ICFP2024
   autogen-modules:

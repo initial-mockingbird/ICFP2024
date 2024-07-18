@@ -1,22 +1,14 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+module Parser.ParserZ where
 
-{-|
-Module      : Parser.Utilities
-Description : General parsing utilities for BNF grammars
-Copyright   : (c) Daniel Pinto, 2024
-                  Enzo Alda, 2024
-License     : GPL-3
-Maintainer  : daniel.andres.pinto@gmail.com
-Stability   : experimental
-Portability : POSIX
-
+{-
 Based on 
 
 Design Patterns for Parser Combinators (Functional Pearl)
@@ -24,8 +16,6 @@ Design Patterns for Parser Combinators (Functional Pearl)
 ACM ISBN 978-1-4503-8615-9/21/08.
 https://doi.org/10.1145/3471874.3472984
 -}
-module Parser.Utilities where
-
 
 import Text.Parsec hiding (token)
 import Text.Parsec.String
@@ -34,10 +24,60 @@ import Data.String (IsString(..))
 import Control.Monad
 import Control.Applicative ((<**>))
 import Data.Functor.Const
-
 import Data.Functor
 import Data.Functor.Identity
 
+
+newtype Channel = Channel Int deriving newtype (Eq, Show)
+newtype Seq     = Seq Int deriving newtype (Eq, Show)
+data Tab = Tab deriving Eq
+newtype Payload' a  = Payload a deriving newtype (Eq, Show)
+type Payload = Payload' String
+data EOT = EOT deriving Eq
+
+instance Show Tab where show _ = "\t"
+instance Show EOT where show _ = "\EOT"
+
+data Packet' a = Packet Channel Seq Tab (Payload' a) EOT
+  deriving Eq
+
+type Packet = Packet' String
+
+bracketS :: String -> String
+bracketS s = "<" <> s <> ">"
+
+emphS :: String -> String
+emphS s = "[" <> s <> "]"
+
+serializePacket :: Packet -> String
+serializePacket (Packet c s t m eot) = concat
+  [ show c
+  , emphS $ show s
+  , show t
+  , show m
+  , show eot
+  ]
+
+pChannel :: Parser Channel
+pChannel = Channel <$> number
+
+pSeq :: Parser Seq 
+pSeq = Seq <$> number
+
+pTab :: Parser Tab
+pTab = Tab <$ char '\t'
+
+pEOT :: Parser EOT
+pEOT = EOT <$ char '\EOT'
+
+deserializePacket :: Parser (Payload' a) -> Parser (Packet' a)
+deserializePacket pMsg 
+  = Packet 
+  <$> pChannel 
+  <*> emphasized pSeq
+  <*> pTab
+  <*> pMsg
+  <*> pEOT
 
 -------------------------------
 -- Main combinators
@@ -55,8 +95,6 @@ token = lexeme . try
 keyword :: String -> Parser ()
 keyword k = token (string k *> notFollowedBy alphaNum)
 
-{- anyKeyword :: Parser ()
-anyKeyword = choice $ map keyword keywords -}
 
 infixl1 :: (a -> b) -> Parser a -> Parser (b -> a -> b) -> Parser b
 infixl1 wrap p op = (wrap <$> p) <**> rest
@@ -82,6 +120,13 @@ quoted = lexeme . between (token $ string "'") (token $ string "'")
 bracketed :: Parser a -> Parser a
 bracketed = lexeme . between (char '<') (char '>')
 
+emphasized :: Parser a -> Parser a
+emphasized = lexeme . between (char '[') (char ']')
+
+number :: Parser Int
+number = f <$> option "" (token $ string "-" ) <*> lexeme (many1 digit)
+  where f "-" ds = read ('-':ds)
+        f _   ds = read ds
 ---------------------------------------------
 -- Fixity, Associativity and Precedence
 ---------------------------------------------
@@ -139,12 +184,3 @@ ops fixity = gops fixity id
 
 sops :: a < b => Fixity a b sig -> [Parser sig] -> Op a b
 sops fixity = gops fixity upcast
-
-----------------
--- Misc Parsers
-----------------
-
-number :: Parser Int
-number = f <$> option "" (token $ string "-" ) <*> lexeme (many1 digit)
-  where f "-" ds = read ('-':ds)
-        f _   ds = read ds

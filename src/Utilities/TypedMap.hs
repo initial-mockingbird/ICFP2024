@@ -11,7 +11,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE BangPatterns #-}
-module TypedMap2 where
+module Utilities.TypedMap where
 
 
 import Data.Map (Map)
@@ -20,33 +20,35 @@ import qualified Data.Map as M
 import Unsafe.Coerce
 import Type.Reflection 
 import Control.Lens.Lens
-import Lensy2
+import Utilities.LensM
+import Utilities.ShowM
+import Zilly.ADT 
+import Zilly.Types
+
 import Debug.Trace
 import Data.List.NonEmpty ( NonEmpty((:|)) )
 import Data.Foldable1 (foldl1')
-import ShowM
 import Control.Concurrent hiding (yield)
 import Control.Monad.IO.Class
 import Control.Monad
 import Control.Applicative hiding (yield)
-import ADT2 
 import Prelude.Singletons hiding (Map,Any,Symbol)
 import Data.String (IsString(..))
 import Data.Singletons.Decide 
 import Control.Monad.Reader
 
 
-data Any m where
-  MkAny :: forall (a :: Types) m.  SingI a => MVar (E (TypeRepMap m) m a) -> Any m  
+data Any m ctx where
+  MkAny :: forall (a :: Types) m ctx.  SingI a => MVar (E ctx (TypeRepMap m ctx) m a) -> Any m ctx 
 
-newtype TypeRepMap m = TypeRepMap (Map Symbol (Any m ))
+newtype TypeRepMap m ctx= TypeRepMap (Map Symbol (Any m ctx))
 
-empty :: TypeRepMap m 
+empty :: TypeRepMap m ctx
 empty = TypeRepMap M.empty 
 
-insert :: forall a m.  (SingI a, MonadIO m) => Symbol -> E (TypeRepMap m) m a -> TypeRepMap m -> m (TypeRepMap m)
+insert :: forall a m ctx.  (SingI a, MonadIO m) => Symbol -> E ctx (TypeRepMap m ctx) m a -> TypeRepMap m ctx -> m (TypeRepMap m ctx)
 insert var val (TypeRepMap m) = case M.lookup var m of
-  Just (MkAny @a' mv ) -> case decideEquality (sing @a') (sing @a)  of 
+  Just (MkAny @a' @_ mv ) -> case decideEquality (sing @a') (sing @a) of 
     Just Refl -> do
       liftIO $ tryTakeMVar mv >> putMVar mv val
       pure . TypeRepMap $ m
@@ -60,22 +62,22 @@ insert var val (TypeRepMap m) = case M.lookup var m of
     mv  <- liftIO $ newMVar val
     pure . TypeRepMap $ M.insert var (MkAny @a mv) m
 
-insertFresh :: forall a m . (SingI a, MonadIO m) => Symbol -> E (TypeRepMap m) m a -> TypeRepMap m -> m (TypeRepMap m )
+insertFresh :: forall a m ctx. (SingI a, MonadIO m) => Symbol -> E ctx (TypeRepMap m ctx) m a -> TypeRepMap m ctx -> m (TypeRepMap m ctx )
 insertFresh var val (TypeRepMap m) = do
     mv <- liftIO $ newMVar val
     pure . TypeRepMap $ M.insert var (MkAny mv) m
 
-declare :: forall (a :: Types) m. (SingI a, MonadIO m) =>  Symbol -> TypeRepMap m -> m (TypeRepMap m)
+declare :: forall (a :: Types) m ctx. (SingI a, MonadIO m) =>  Symbol -> TypeRepMap m ctx -> m (TypeRepMap m ctx)
 declare  var (TypeRepMap m) = case M.lookup var m of
   Just _ -> error $ "Variable: " <> show var <> " already declared"
   Nothing -> do
-    mv :: MVar (E (TypeRepMap m) m a) <- liftIO newEmptyMVar 
+    mv :: MVar (E ctx (TypeRepMap m ctx) m a) <- liftIO newEmptyMVar 
     !x <- pure . TypeRepMap $ M.insert var (MkAny mv) m
 
     pure x
 
 
-yield :: forall (a :: Types) m env. (SingI a,  MonadIO m) => Symbol -> TypeRepMap m  -> m (E env m a)
+yield :: forall (a :: Types) m env ctx. (SingI a,  MonadIO m) => Symbol -> TypeRepMap m ctx  -> m (E ctx env m a)
 yield var (TypeRepMap m) = 
   case M.lookup var m of
     Just (MkAny @a' mv ) -> case decideEquality (sing @a') (sing @a)  of
@@ -89,14 +91,14 @@ yield var (TypeRepMap m) =
     Nothing -> error $ "Variable: " <> show var <> " not found"
 
 
-instance forall (a :: Types) m. (SingI a, MonadIO m) 
-  => IsString (LensyM' m (TypeRepMap m ) (E (TypeRepMap m ) m a)) where
-  fromString var =  LensyM' (yield var) (flip $ insert var) (flip $ insertFresh var) var 
+instance forall (a :: Types) m ctx. (SingI a, MonadIO m) 
+  => IsString (LensM m (TypeRepMap m ctx) (E ctx (TypeRepMap m ctx) m a)) where
+  fromString var =  LensM (yield var) (flip $ insert var) (flip $ insertFresh var) var 
 
-mkVar :: forall (a :: Types) m. 
+mkVar :: forall (a :: Types) m ctx. 
   ( SingI a
   , MonadIO m
-  ) => String -> LensyM' m (TypeRepMap m) (E (TypeRepMap m) m a)
+  ) => String -> LensM m (TypeRepMap m ctx) (E ctx (TypeRepMap m ctx) m a)
 mkVar = fromString
 
 --IsString (LensyM' m TypeRepMap (m a))
@@ -119,7 +121,7 @@ instance MonadIO m => ShowM m  TypeRepMap where
     
     pure $ "{ " <> s <> " }" -}
 
-instance MonadIO m => ShowM m  (TypeRepMap m ) where
+instance MonadIO m => ShowM m  (TypeRepMap m ctx) where
   showM (TypeRepMap m) =  -- pure "env"
     pure . show . M.keys $ m 
 
