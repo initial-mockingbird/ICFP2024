@@ -9,6 +9,9 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-|
 Module      : Zilly.ADT
@@ -36,65 +39,78 @@ module Zilly.ADT where
 
 import Zilly.Types
 import Utilities.LensM
-import Data.Kind (Type)
+import Data.Kind (Type, Constraint)
+import Data.Function.Singletons
+import Data.Coerce 
 
-
+type family AssocCtxMonad (ctx :: Type) :: (Type -> Type)
 
 {-| Zilly expression Language. |-}
-data  E (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) where
-  Val     :: ValX ctx env m -> Int -> E ctx env m (Value Z)
-  Var     :: VarX ctx env m a -> LensM m env (E ctx env m a) -> E ctx env m a
-  Minus   :: MinusX ctx env m a b -> E ctx env m a -> E ctx env m b -> E ctx env m (Value Z)
-  Less    :: LessX ctx env m a b -> E ctx env m a -> E ctx env m b -> E ctx env m (Value Z)
-  If      :: IfX ctx env m x0 x1 x2 x3 -> E ctx env m x0 -> E ctx env m x1 -> E ctx env m x2 -> E ctx env m x3
-  Lambda  :: LambdaX ctx env m a b -> LensM m env (E ctx env m a) -> E ctx env m b  -> E ctx env m (a ~> b)
-  App     :: forall ctx f x b arg m env. AppX ctx env m f x arg b -> E ctx env m f -> E ctx env m x -> E ctx env m b
-  Defer   :: DeferX ctx env m a -> E ctx env m a -> E ctx env m (Lazy a)
-  Formula :: FormulaX ctx env m a -> LensM m env (E ctx env m a) -> E ctx env m (Lazy a)
-  Exp     :: ExpX ctx env m a -> E ctx env m a
+data  E (ctx :: Type) (a :: Types) where
+  Val     :: ValX ctx -> Int -> E ctx (Value Z)
+  Var     :: VarX ctx a -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx a
+  Minus   :: MinusX ctx a b -> E ctx a -> E ctx b -> E ctx (Value Z)
+  Less    :: LessX ctx a b -> E ctx a -> E ctx b -> E ctx (Value Z)
+  If      :: IfX ctx x0 x1 x2 x3 -> E ctx x0 -> E ctx x1 -> E ctx x2 -> E ctx x3
+  Lambda  :: LambdaX ctx a b -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx b  -> E ctx (a ~> b)
+  App     :: forall ctx f x b arg. AppX ctx f x arg b -> E ctx f -> E ctx x -> E ctx b
+  Defer   :: DeferX ctx a -> E ctx a -> E ctx (Lazy a)
+  Formula :: FormulaX ctx a -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx (Lazy a)
+  Exp     :: ExpX ctx a -> E ctx a
 
-  Closure  :: ClosureX ctx env m a -> (E ctx env m a,env) -> E ctx env m a
-  LambdaC  :: LambdaCX ctx env m a b -> (env, LensM m env (E ctx env m a), E ctx env m b) -> E ctx env m (a ~> b)
-  ValueC   :: ValueCX ctx env m a -> (E ctx env m (Value a), env) -> E ctx env m (Value a)
-  Subtyped :: SubtypedX ctx env m a b -> E ctx env m a -> E ctx env m b
-
-
-type family ValX      (ctx :: Type) (env :: Type) (m :: Type -> Type) :: Type
-type family ValueCX   (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types0):: Type
-type family ClosureX  (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) :: Type
-type family VarX      (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) :: Type
-type family DeferX    (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) :: Type
-type family FormulaX  (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) :: Type
-type family ExpX      (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) :: Type
-type family LambdaCX  (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) (b :: Types) :: Type
-type family SubtypedX (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) (b :: Types) :: Type
-type family MinusX    (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) (b :: Types) :: Type
-type family LessX     (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) (b :: Types) :: Type
-type family LambdaX   (ctx :: Type) (env :: Type) (m :: Type -> Type) (a :: Types) (b :: Types) :: Type
-type family AppX      (ctx :: Type) (env :: Type) (m :: Type -> Type) (f :: Types ) (x :: Types ) (arg :: Types) (b :: Types ) :: Type
-type family IfX       (ctx :: Type) (env :: Type) (m :: Type -> Type) (x0 :: Types) (x1 :: Types) (x2 :: Types ) (x3 :: Types) :: Type
+  Closure  :: ClosureX ctx a -> (E ctx a,Gamma (AssocCtxMonad ctx)) -> E ctx a
+  LambdaC  :: LambdaCX ctx a b -> (Gamma (AssocCtxMonad ctx), LensM (AssocCtxMonad ctx) (E ctx a), E ctx b) -> E ctx (a ~> b)
+  ValueC   :: ValueCX ctx a -> (E ctx (Value a), Gamma (AssocCtxMonad ctx)) -> E ctx (Value a)
+  Subtyped :: SubtypedX ctx a b -> E ctx a -> E ctx b
 
 
+type family ValX      (ctx :: Type) :: Type
+type family ValueCX   (ctx :: Type) (a :: Types0):: Type
+type family ClosureX  (ctx :: Type) (a :: Types) :: Type
+type family VarX      (ctx :: Type) (a :: Types) :: Type
+type family DeferX    (ctx :: Type) (a :: Types) :: Type
+type family FormulaX  (ctx :: Type) (a :: Types) :: Type
+type family ExpX      (ctx :: Type) (a :: Types) :: Type
+type family LambdaCX  (ctx :: Type) (a :: Types) (b :: Types) :: Type
+type family SubtypedX (ctx :: Type) (a :: Types) (b :: Types) :: Type
+type family MinusX    (ctx :: Type) (a :: Types) (b :: Types) :: Type
+type family LessX     (ctx :: Type) (a :: Types) (b :: Types) :: Type
+type family LambdaX   (ctx :: Type) (a :: Types) (b :: Types) :: Type
+type family AppX      (ctx :: Type) (f :: Types ) (x :: Types ) (arg :: Types) (b :: Types ) :: Type
+type family IfX       (ctx :: Type) (x0 :: Types) (x1 :: Types) (x2 :: Types ) (x3 :: Types) :: Type
 
-  {- Closure  :: (E ctx env m a,env) -> E ctx env m a
-  LambdaC  :: (env, LensM m env (E ctx env m a), E ctx env m b) -> E ctx env m (a ~> b)
-  ValueC   :: (E ctx env m (Value a), env) -> E ctx env m (Value a)
-  Subtyped :: E ctx env m a -> E ctx env m b
-  DeferS   :: E ctx env m a -> E ctx env m (LazyS b) 
-  FEval    :: E ctx env m a -> E ctx env m (Value b)  -}
+  {- 
+  DeferS   :: E ctx a -> E ctx (LazyS b) 
+  FEval    :: E ctx a -> E ctx (Value b)  -}
+
 
 -------------------
 -- Proofs
 -------------------
 
-data Proof psi a where
- Proof :: psi a => Proof psi a
+class (forall a. psi (f a)) => C psi f 
+instance (forall a. psi (f a)) => C psi f
+
+class (forall a. psi (f $ a)) => CS psi f 
+instance (forall a. psi (f $ a)) => CS psi f
+
+data Dict (c :: Constraint) where 
+  Dict :: c => Dict c   
+
+data Proof (psi :: k -> Constraint) (a :: k) where
+ P :: psi a => Proof psi a
+
+data Proof' (psi :: k1 -> Constraint) (f :: k0 -> k1) where
+  P' :: forall k (a :: k) f psi. psi (f a) => Proof' psi f
+
+data Proof'' (psi :: k1 -> Constraint) (f :: k0 -> k1) where
+  P'' :: forall k (a :: k) f psi. psi (f a) => Proof'' psi f
 
 data Proof2 psi a b where
   Proof2 :: psi a b => Proof2 psi a b
 
-data Proof' psi (m :: Type -> Type) where
-  P' :: psi m => Proof' psi m
+{- data Proof' psi (m :: Type -> Type) where
+  P' :: psi m => Proof' psi m -}
 
 data ProofMR psi (a :: Type) (m :: Type -> Type) where
   PMR :: psi a m => ProofMR psi a m

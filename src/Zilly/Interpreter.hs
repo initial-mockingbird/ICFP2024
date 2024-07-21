@@ -21,23 +21,34 @@ module Zilly.Interpreter where
 import Utilities.TypedMap
 import Utilities.LensM
 import Zilly.ADT
-import Zilly.Expressions
 import Zilly.RValue
 import Zilly.Types
-import Zilly.Action
-import Utilities.ShowM
+
 import Control.Monad.Reader
 
 
 import Control.Monad
 import Control.Applicative (Alternative)
 
-type Env = TypeRepMap BaseInterpreter ExprTag
+{- type Env = TypeRepMap BaseInterpreter ExprTag
 newtype BaseInterpreter a = BI { runBI :: ReaderT Env IO a} 
-  deriving newtype (Functor,Applicative, Alternative, Monad,MonadIO,MonadFail,MonadReader Env)
+  deriving newtype (Functor,Applicative, Alternative, Monad,MonadIO,MonadFail,MonadReader Env) -}
 
+newtype TaggedInterpreter ctx a = TI { runTI :: ReaderT (Gamma (AssocCtxMonad ctx)) IO a} 
+  deriving newtype 
+    ( Functor
+    , Applicative
+    , Alternative
+    , Monad
+    , MonadIO
+    , MonadFail
+    )
 
-instance ShowM BaseInterpreter (E ExprTag Env BaseInterpreter a) where
+instance (Gamma (AssocCtxMonad ctx) ~ TypeRepMap ctx) =>  MonadReader (TypeRepMap ctx) (TaggedInterpreter ctx) where
+  ask = TI ask
+  local f = TI . local f . runTI
+
+{- instance ShowM BaseInterpreter (E ExprTag a) where
 
   showsPrecM p = \case
     Val _ n -> showsPrecM p n
@@ -82,4 +93,4 @@ printProgram :: ShowM BaseInterpreter a => a -> IO ()
 printProgram = putStrLn <=< run . showM 
 
 printAndExec :: Traversable t => t (A (TypeRepMap BaseInterpreter ExprTag) BaseInterpreter a) -> IO ()
-printAndExec = run . execProgram
+printAndExec = run . execProgram -}

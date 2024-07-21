@@ -24,6 +24,8 @@ import Zilly.ADT
 import Zilly.Expressions
 import Zilly.Types
 import Zilly.RValue
+import Zilly.Upcast
+import Zilly.Interpreter
 import Utilities.TypedMap
 import Utilities.ShowM
 import Control.Monad.Reader
@@ -34,95 +36,108 @@ import Control.Monad
 import Prelude.Singletons (SingI)
 import Debug.Trace (trace)
 import Control.Applicative (Alternative)
+import Data.Singletons (SingI(..))
 
-type ShowMContext m env =
-  ( ShowMContextE m env
-  , forall a. ShowM m (A env m a)
-  )
 
+data ActionTag
+
+type family AssocActionTag (ctx :: Type) :: Type
+type instance AssocActionTag ActionTag = ExprTag
 
 
 infix 0 :=
 infix 0 :=.
-data A (env :: Type) (m :: Type -> Type) r where
-  (:=) :: forall (var :: Types) (e :: Types) m env.
-    ( SingI var
+data A ctx r where
+  (:=) :: forall {m} {env} {ctx} actx (var :: Types) (e :: Types) .
+    ( AssocActionTag actx ~ ctx
+    , AssocCtxMonad ctx ~ m
+    , Gamma m ~ env
+    , SingI var
     , SingI e
-    , RValue (E ExprTag env m) var m
-    , RValue (E ExprTag env m) e m
-    , UpperBound (RValueT (E ExprTag env m) var) (RValueT (E ExprTag env m) e) ~ Just (RValueT (E ExprTag env m) var)
+    , RValue ctx var
+    , RValue ctx e
+    , UpperBound (RValueT var) (RValueT  e) ~ Just (RValueT var)
     ) 
-    =>  LensM m env (E ExprTag env m var) -> E ExprTag env m e -> A env m '()
-  (:=.) :: forall (var :: Types) (e :: Types) m env.
-    ( SingI var
+    =>  LensM m (E ctx var) -> E ctx  e -> A actx '()
+  (:=.) :: forall {m} {env} {ctx} actx (var :: Types) (e :: Types) .
+    ( AssocActionTag actx ~ ctx
+    , AssocCtxMonad ctx ~ m
+    , Gamma m ~ env
+    , SingI var
     , SingI e
-    , RValue (E ExprTag env m) var m
-    , RValue (E ExprTag env m) e m
-    , UpperBound (RValueT (E ExprTag env m) var) (RValueT (E ExprTag env m) e) ~ Just (RValueT (E ExprTag env m) var)
+    , RValue ctx var
+    , RValue ctx e
+    , UpperBound (RValueT var) (RValueT  e) ~ Just (RValueT var)
     ) 
-    => LensM m env (E ExprTag env m var) -> E ExprTag env m e -> A env m '()
-  Print :: 
-    ( ShowMContextE m env
+    =>  LensM m (E ctx var) -> E ctx  e -> A actx '()
+  Print :: forall {ctx} actx a.
+    ( AssocActionTag actx ~ ctx
     , SingI a
-    , RValue (E ExprTag env m) a m
+    , RValue ctx a
     )
-    => E ExprTag env m a -> A env m '()
+    => E ctx a -> A actx '()
+  OfExpr :: forall {ctx} actx a.
+    ( AssocActionTag actx ~ ctx
+    , SingI a
+    , RValue ctx a
+    )
+    => E ctx a -> A actx '()
+  
 
 {- class SetEnv (m :: Type -> Type) (env :: Type) (a :: Type) where
   setEnv :: Lensy env a -> a -> m b -> m b -}
 
-class Execute (m :: Type -> Type) where
-  type EnvType m :: Type
-  execInstruction :: A (EnvType m) m a -> m (String, EnvType m)
+class Execute actx where
+  execInstruction :: forall {ctx} {m} {env} a. 
+    ( AssocActionTag actx ~ ctx
+    , AssocCtxMonad ctx ~ m
+    , Gamma m ~ env
+    ) => A actx a -> m (A actx a, env)
 
-instance 
-  ( MonadIO m
-  , MonadReader (TypeRepMap m ExprTag) m
-  , Alternative m
-  , ShowM m (TypeRepMap m ExprTag)
-  , forall a. ShowM m (A (TypeRepMap m ExprTag) m a)
-  , forall a. ShowM m (E ExprTag (TypeRepMap m ExprTag) m a)
-  ) => Execute m  where 
-  type EnvType m = (TypeRepMap m ExprTag)
-  execInstruction ((:=) @var @e var e) 
-    = withSingIRType @var @(E ExprTag (EnvType m) m)
-    $ withSingIRType @e @(E ExprTag (EnvType m) m)
-    $ ubIsCommutative @(RValueT (E ExprTag (EnvType m) m) var) @(RValueT (E ExprTag (EnvType m) m) e)
+instance  Execute ActionTag  where 
+  execInstruction ((:=) @_ @var @e var e) 
+    = withSingIRType @var
+    $ withSingIRType @e
+    $ ubIsCommutative @(RValueT var) @(RValueT e)
     $ do
-    gamma  <- declare @(RValueT (E ExprTag (EnvType m) m) var) @m @ExprTag (varNameM var) =<< ask
+    gamma  <- declare @(RValueT var) @ExprTag (varNameM var) =<< ask
     rve    <- local (const gamma) $ rvalue e
-    gamma' <- case upcast @(RValueT (E ExprTag (EnvType m) m) e) @(RValueT (E ExprTag (EnvType m) m) var) @(EnvType m) @m rve of
-      SameTypeUB  rve'     -> insert @(RValueT (E ExprTag (EnvType m) m) var) @m @ExprTag (varNameM var) rve' gamma
-      RightUB     rve'     -> insert @(RValueT (E ExprTag (EnvType m) m) var) (varNameM var) rve' gamma
-      LeftUB      rve'     -> insert @(RValueT (E ExprTag (EnvType m) m) var) (varNameM var) rve' gamma
-      SomethingElseUB rve' -> insert @(RValueT (E ExprTag (EnvType m) m) var) (varNameM var) rve' gamma
-
-    s <- showM (var := e)
-    pure ("<ACK: " <> s <> " ===> OK>",gamma')
-  execInstruction ((:=.) @var @e var e) 
-    = withSingIRType @var @(E ExprTag (EnvType m) m)
-    $ withSingIRType @e @(E ExprTag (EnvType m) m)
-    $ ubIsCommutative @(RValueT (E ExprTag (EnvType m) m) var) @(RValueT (E ExprTag (EnvType m) m) e)
+    gamma' <- case upcast @ExprTag @(RValueT e) @(RValueT  var) UpcastE rve of
+      SameTypeUB  rve'     -> insert @(RValueT var) @ExprTag (varNameM var) rve' gamma
+      RightUB     rve'     -> insert @(RValueT var) (varNameM var) rve' gamma
+      LeftUB      rve'     -> insert @(RValueT var) (varNameM var) rve' gamma
+      SomethingElseUB rve' -> insert @(RValueT var) (varNameM var) rve' gamma
+    pure (var := e,gamma')
+  execInstruction ((:=.) @_ @var @e var e) 
+    = withSingIRType @var 
+    $ withSingIRType @e 
+    $ ubIsCommutative @(RValueT var) @(RValueT e)
     $ do
     gamma  <- ask
     rve    <- local (const gamma) $ rvalue e
-    gamma' <- case upcast @(RValueT (E ExprTag (EnvType m) m) e) @(RValueT (E ExprTag (EnvType m) m) var) @(EnvType m) @m rve of
-      SameTypeUB  rve'     -> insert @(RValueT (E ExprTag (EnvType m) m) var) @m @ExprTag (varNameM var) rve' gamma
-      RightUB     rve'     -> insert @(RValueT (E ExprTag (EnvType m) m) var) (varNameM var) rve' gamma
-      LeftUB      rve'     -> insert @(RValueT (E ExprTag (EnvType m) m) var) (varNameM var) rve' gamma
-      SomethingElseUB rve' -> insert @(RValueT (E ExprTag (EnvType m) m) var) (varNameM var) rve' gamma
-
-    s <- showM (var := e)
-    pure ("<ACK: " <> s <> " ===> OK>",gamma')
-  execInstruction (Print @_ @_ @e e) = withSingIRType @e $ do
+    gamma' <- case upcast @ExprTag @(RValueT  e) @(RValueT  var) UpcastE rve of
+      SameTypeUB  rve'     -> insert @(RValueT  var) @ExprTag (varNameM var) rve' gamma
+      RightUB     rve'     -> insert @(RValueT  var) (varNameM var) rve' gamma
+      LeftUB      rve'     -> insert @(RValueT  var) (varNameM var) rve' gamma
+      SomethingElseUB rve' -> insert @(RValueT  var) (varNameM var) rve' gamma
+    pure (var :=. e,gamma')
+  execInstruction (OfExpr @_ @e e) 
+    = withSingIRType @e
+    $ withRVType @(AssocActionTag ActionTag) (sing @(RValueT e))
+    $ do
     rve <- rvalue e
-    s  <- showM (Print e)
-    s' <- showM rve
     gamma <- ask 
-    pure ("<ACK: " <> s <> " ===> " <> s' <> ">", gamma) 
+    pure (OfExpr rve, gamma)
+  execInstruction (Print @_ @e e) 
+    = withSingIRType @e 
+    $ withRVType @(AssocActionTag ActionTag) (sing @(RValueT e))
+    $ do
+    rve <- rvalue e
+    gamma <- ask 
+    pure (Print rve, gamma)
 
 
-
+{-
 execProgram :: forall t m a.
   ( Traversable t
   , Execute m
@@ -139,7 +154,7 @@ execProgram = void . foldM (\env a -> local (const env) $ f a) empty
       (s,env) <- execInstruction a
       liftIO . putStrLn <=< showM $ a 
       liftIO $ putStrLn s 
-      pure env
+      pure env -}
       
 
   

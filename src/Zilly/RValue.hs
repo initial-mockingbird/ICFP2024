@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE BangPatterns          #-}
@@ -13,6 +14,10 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE PolyKinds #-}
 
 {-|
 Module      : Zilly.RValue
@@ -29,17 +34,31 @@ Defines the RValue class, provides a way to inject them RValue types into a cont
 module Zilly.RValue where 
 
 import Zilly.Types
+import Zilly.ADT
 import Data.Singletons.TH  hiding (Const)
-
+import Prelude.Singletons hiding (Const)
 import Data.Singletons.Decide
 import Data.Kind (Type)
+
+
+
+{- type family RValueT (a :: Types) :: Types where
+  RValueT (Value a) = Value a
+  RValueT (Lazy a)  = a
+  RValueT (LazyS a) = a -}
+
+$(singletons [d| 
+  rValueT :: Types -> Types
+  rValueT (Value a) = Value a
+  rValueT (Lazy a)  = a
+  rValueT (LazyS a) = a
+  |])
 
 {- |
 Class that yields the rvalue of a given type. 
 -}
-class RValue (f :: Types -> Type) (a :: Types) m where
-  type RValueT f a :: Types
-  rvalue :: f a -> m (f (RValueT f a))
+class RValue (ctx :: Type) (a :: Types)  where
+  rvalue :: E ctx a -> (AssocCtxMonad ctx) (E ctx (RValueT a))
 
 {- -- same issue, illegal type family declaration....
 type RTypeAxioms f =
@@ -48,49 +67,48 @@ type RTypeAxioms f =
   ) -}
 
 -- | Whenever we know a type, we know its rvalue-dict
-withRVType :: forall (f :: Types -> Type) (m :: Type -> Type) (z :: Types)  r.
-  ( forall (a :: Types). RValue f (Lazy (Lazy a)) m
-  , forall (a :: Types0). RValue f (Lazy (Value a)) m
-  , forall (a :: Types0). RValue f (Value a) m
-  ) => Sing z -> (RValue f z m => r) -> r
+withRVType :: forall (ctx :: Type) (z :: Types)  r.
+  ( forall (a :: Types).  RValue ctx (Lazy (Lazy a)) 
+  , forall (a :: Types0). RValue ctx (Lazy (Value a)) 
+  , forall (a :: Types0). RValue ctx (Value a) 
+  ) => Sing z -> (RValue ctx z  => r) -> r
 withRVType (SValue v) f = case v of
   (SZ :: Sing (x :: Types0)) -> f
-  (z1 :%-> z2) -> withRVType @f @m z1 $ withRVType @f @m z2 f
-withRVType (SLazy  (SLazy s)) f = withRVType @f @m s f
-withRVType (SLazy (SValue s)) f = withSingI s $ withRVType @f @m (SValue s) f
+  (z1 :%-> z2) -> withRVType @ctx z1 $ withRVType @ctx z2 f
+withRVType (SLazy  (SLazy s)) f = withRVType @ctx s f
+withRVType (SLazy (SValue s)) f = withSingI s $ withRVType @ctx (SValue s) f
 withRVType _ _ = error "Lazy* not supported"
 
 -- | Whenever we know a type, we know its rtype
-withSingIRType :: forall (z :: Types) f cont. SingI z => (SingI  (RValueT f z) => cont) -> cont
+withSingIRType :: forall (z :: Types) cont. SingI z => (SingI  (RValueT z) => cont) -> cont
 withSingIRType f 
-  = withSingIRType @z @f 
-  $ case sing @z of
-  (SValue @n _) -> case decideEquality' @_ @(Value n) @(RValueT f z) of
+  = case sing @z of
+  (SValue @n _) -> case decideEquality' @_ @(Value n) @(RValueT z) of
     Just Refl -> f
     Nothing -> error "Type mismatch"
-  (SLazy @n sa@(SLazy _)) -> withSingI @n sa $ case decideEquality' @_ @(RValueT f z) @n of
+  (SLazy @n sa@(SLazy _)) -> withSingI @n sa $ case decideEquality' @_ @(RValueT z) @n of
     Just Refl -> f
     Nothing -> error "Type mismatch"
-  (SLazy @n sa@(SValue _)) -> withSingI @n sa $ case decideEquality' @_ @(RValueT f z) @n of
+  (SLazy @n sa@(SValue _)) -> withSingI @n sa $ case decideEquality' @_ @(RValueT z) @n of
     Just Refl -> f
     Nothing -> error "Type mismatch"
   (SLazyS @n sa)   -> error "Lazy* not implemented"
   SLazy (SLazyS _) -> error "Lazy* not implemented"
 
 -- | Whenever we know two types, whe know their meet.
-rvaluePreservesST :: forall {r0 :: Types} a b f cont. 
+rvaluePreservesST :: forall {r0 :: Types} a b cont. 
   ( SingI a
   , SingI b
   , SingI r0
   , UpperBound a b ~ Just r0
   ) 
-  => (UpperBound (RValueT f a) (RValueT f b) ~ Just (RValueT f r0) => cont) -> cont
+  => (UpperBound (RValueT a) (RValueT b) ~ Just (RValueT r0) => cont) -> cont
 rvaluePreservesST f
-  = withSingIRType @a @f 
-  $ withSingIRType @b @f 
-  $ withSingIRType @r0 @f
-  $ withSingIUBType @(RValueT f a) @(RValueT f b)
-  $ case decideEquality' @_ @(UpperBound (RValueT f a) (RValueT f b)) @(Just (RValueT f r0))of
+  = withSingIRType @a 
+  $ withSingIRType @b 
+  $ withSingIRType @r0
+  $ withSingIUBType @(RValueT a) @(RValueT b)
+  $ case decideEquality' @_ @(UpperBound (RValueT a) (RValueT b)) @(Just (RValueT r0))of
     Just Refl -> f
     Nothing -> error "impossible case"
 
@@ -99,35 +117,50 @@ rvaluePreservesST f
   \[a \vee rtype(a) = a\]
 
 -}
-rvalueIsPred :: forall (a :: Types) f cont.
+rvalueIsPred :: forall (a :: Types) cont.
   ( SingI a
   )
-  => (UpperBound (RValueT f a) a ~ Just a => cont) -> cont
+  => (UpperBound (RValueT a) a ~ Just a => cont) -> cont
 rvalueIsPred !f 
-  = withSingIRType @a @f
-  $ withSingIUBType @(RValueT f a) @a 
-  $ case  decideEquality (sing @(UpperBound (RValueT f a) a )) (sing @(Just a)) of
+  = withSingIRType @a
+  $ withSingIUBType @(RValueT a) @a 
+  $ case  decideEquality (sing @(UpperBound (RValueT a) a )) (sing @(Just a)) of
   Just Refl -> f
   Nothing -> error "impossible case"
+{- rvalueIsPred !f 
+  = case sing @a of
+    (SValue @n SZ) -> case sing @(RValueT (Value n)) of 
+      SValue @m SZ -> f
+    (SValue @n (a :%-> b)) -> case sing @(RValueT (Value n)) of 
+      SValue @m (a' :%-> b') -> f
+      
+    (SLazy @n sa@(SLazy _)) -> withSingI @n sa $ case decideEquality' @_ @(RValueT a) @n of
+      Just Refl -> undefined
+      Nothing -> error "Type mismatch"
+    (SLazy @n sa@(SValue _)) -> withSingI @n sa $ case decideEquality' @_ @(RValueT a) @n of
+      Just Refl -> undefined
+      Nothing -> error "Type mismatch"
+    (SLazyS @n sa)   -> error "Lazy* not implemented"
+    SLazy (SLazyS _) -> error "Lazy* not implemented" -}
 
 -- | An easy way of constructing the subtyped context.
-subtyped'CTX :: forall {r :: Types} (a :: Types) (b :: Types) (f :: Types -> Type) (m :: Type -> Type) cont.
+subtyped'CTX :: forall {r :: Types} ctx (a :: Types) (b :: Types)  cont.
   ( SingI a
   , SingI b
   , SingI r
   , UpperBound a b ~ 'Just r
-  , forall (a :: Types). RValue f (Lazy (Lazy a)) m
-  , forall (a :: Types0). RValue f (Lazy (Value a)) m
-  , forall (a :: Types0). RValue f (Value a) m
-  ) => ((UpperBound (RValueT f a) r ~ 'Just r, RValue f a m, RValue f b m) => cont) -> cont
+  , forall (z :: Types).  RValue ctx (Lazy (Lazy z)) 
+  , forall (z :: Types0). RValue ctx (Lazy (Value z)) 
+  , forall (z :: Types0). RValue ctx (Value z) 
+  ) => ((UpperBound (RValueT a) r ~ 'Just r, RValue ctx a, RValue ctx b) => cont) -> cont
 subtyped'CTX f 
-  = withSingIRType @a @f 
-  $ withSingIRType @b @f
-  $ withRVType @f @m (sing @a)  
-  $ withRVType @f @m (sing @b) 
-  $ rvalueIsPred @a @f
+  = withSingIRType @a  
+  $ withSingIRType @b 
+  $ withRVType @ctx (sing @a)  
+  $ withRVType @ctx (sing @b) 
+  $ rvalueIsPred @a
   $ ubIsUb @a @b
-  $ ubIsTransitive' @(RValueT f a) @a @r
+  $ ubIsTransitive' @(RValueT a) @a @r
   $ f
 
 {- 
@@ -189,3 +222,5 @@ lazyRT f = case sing @a of
   sls@(SLazyS _) -> error "Lazy* not implemented"
 
  -}
+
+

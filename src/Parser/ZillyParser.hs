@@ -29,6 +29,7 @@ module Parser.ZillyParser
   , parseAction
   , parseFile
   , parseExpr
+  , parserT2AdtT
   ) where
 
 import Parser.Utilities
@@ -42,7 +43,7 @@ import Data.String (IsString(..))
 import Control.Monad
 
 import Data.Functor.Identity
-
+import Control.Applicative hiding (Alternative(..),optional)
 
 keywords :: [Symbol]
 keywords = 
@@ -76,40 +77,50 @@ instance IsString (Parser () ) where
 anyKeyword :: Parser ()
 anyKeyword = choice $ map keyword keywords
 
+-------------------------------
+-- Useful functions
+-------------------------------
+
+
+flip2 f x3 = \x1 x2 -> f x1 x2 x3
+
+
+flip3 f x4 = \x1 x2 x3 -> f x1 x2 x3 x4
+
 -----------------------------------------
 -- Expression Grammar / Untyped AST
 -----------------------------------------
 
 data Expr
-  = Minus Expr Term 
-  | Less Expr Term
-  | OfTerm Term
+  = Minus Expr Term SourcePos
+  | Less Expr Term  SourcePos
+  | OfTerm Term     
   deriving (Show,Eq)
 
 data Term
-  = App Term Expr
-  | OfAtom Atom
+  = App Term Expr SourcePos
+  | OfAtom Atom   
   deriving (Show,Eq)
 
 data Atom
-  = Val Int 
-  | Var Symbol
-  | Parens Expr
-  | Defer Expr 
-  | IfThenElse Expr Expr Expr
-  | Formula Expr
-  | Lambda Symbol Types Expr
+  = Val Int      SourcePos
+  | Var Symbol   SourcePos
+  | Parens  Expr SourcePos
+  | Defer   Expr SourcePos
+  | Formula Expr SourcePos
+  | IfThenElse Expr Expr Expr SourcePos
+  | Lambda Symbol Types Expr  SourcePos
   deriving (Show,Eq)
 
 data Types
-  = Arrow Types0 Types
-  | OfTypes0 Types0
+  = Arrow Types0 Types SourcePos
+  | OfTypes0 Types0    
   deriving (Show, Eq)
 
 data Types0 
-  = Z
-  | Lazy Types
-  | LazyS Types
+  = Z           SourcePos
+  | Lazy Types  SourcePos
+  | LazyS Types SourcePos
   deriving (Show, Eq)
 
 instance Atom < Term where
@@ -126,16 +137,18 @@ instance Types0 < Types where
 -- Type Parsers
 -----------------------------------------
 
+
+
     
 pType0 :: Parser Types0
 pType0 
-  = Z <$ token (string "Int")
-  <|> Lazy  <$> (token (string "Lazy")  *> bracketed pType) 
-  <|> LazyS <$> (token (string "Lazy*") *> bracketed pType)
+  = Z <$> getPosition <*  (token (string "Int") <|> token (string "Z"))
+  <|> flip Lazy  <$> getPosition <*> (token (string "Lazy")  *> bracketed pType) 
+  <|> flip LazyS <$> getPosition <*> (token (string "Lazy*") *> bracketed pType)
 
 pType :: Parser Types
 pType = precedence $ 
-  sops InfixR [Arrow <$ token (string "->")] |-<
+  sops InfixR [flip2 Arrow <$> getPosition <* token (string "->")] |-<
   Atom pType0
 
 
@@ -150,23 +163,67 @@ ident
   <|> lexeme (f <$> letter <*> many (letter <|> digit <|> char '_'))
   where f c cs = c:cs
 
+mkVal :: Parser Int -> Parser Atom
+mkVal p = getPosition <**> (Val <$> p)
+
+mkParens :: Parser Expr -> Parser Atom
+mkParens p = getPosition <**> (Parens <$> parens p)
+
+mkIfThenElse :: Parser Expr -> Parser Expr -> Parser Expr -> Parser Atom
+mkIfThenElse p1 p2 p3 = getPosition <**> 
+  (IfThenElse <$> (keyword "if" *> p1 <* keyword "then") <*> p2 <* keyword "else" <*> p3)
+
+mkFormula :: Parser Expr -> Parser Atom
+mkFormula p = getPosition <**> (Formula <$> (keyword "formula" *> parens p))
+
+mkLambda :: Parser Symbol -> Parser Types -> Parser Expr -> Parser Atom
+mkLambda p1 p2 p3 = getPosition <**> 
+  ( Lambda 
+  <$> (token (string "/.") *> p1) 
+  <*> (token (string ":") *> p2) 
+  <*> (token (string "=>") *> p3)
+  )
+
+mkVar :: Parser Symbol -> Parser Atom
+mkVar p = getPosition <**> (Var <$> p)
+
+mkDefer :: Parser Expr -> Parser Atom
+mkDefer p = getPosition <**> (Defer <$> quoted p)
+
+
 
 atom :: Parser Atom
 atom 
-  =   Val    <$> number  
-  <|> Parens <$> parens expr
-  <|> IfThenElse <$ keyword "if" <*> expr <* keyword "then" <*> expr <* keyword "else" <*> expr
-  <|> Formula <$> (keyword "formula" *> expr)
-  <|> Lambda <$> (token (string "/.") *> ident) <*> (token (string ":") *> pType) <*> (token (string "=>") *> expr)
-  <|> Var <$> ident
-  <|> Defer  <$> quoted expr
+  =   mkVal number  
+  <|> mkParens expr
+  <|> mkIfThenElse expr expr expr
+  <|> mkFormula expr
+  <|> mkLambda ident pType expr
+  <|> mkVar ident
+  <|> mkDefer expr
 
+    
+{- mkMinus :: Parser Expr -> Parser Term -> Parser Expr
+mkMinus p t = getPosition <**> 
+  (Minus <$> p <* lexeme (char '-') <*> t) -}
+
+
+
+
+mkMinus :: Parser (Expr-> Term -> Expr)
+mkMinus = (\p x y -> Minus x y p) <$> getPosition
+
+mkLess :: Parser (Expr-> Term -> Expr)
+mkLess = (\p x y -> Less x y p) <$> getPosition
+
+mkApp :: Parser Expr -> Parser (Term -> Term)
+mkApp p = (\p x y -> App y x p) <$> getPosition <*> parens p
 
 expr :: Parser Expr
 expr = precedence $
-  sops InfixL [Minus <$ lexeme (char '-'), Less <$ lexeme (char '<')] |-<
+  sops InfixL [mkMinus , mkLess] |-<
   --sops Postfix [flip App <$> parens atom] |-<
-  sops Postfix [flip App <$> parens expr] |-<
+  sops Postfix [mkApp expr] |-<
   Atom atom
 
 
@@ -180,20 +237,29 @@ data A1
   deriving (Show,Eq)
 
 data A0
-  = Decl Types Symbol Expr
-  | Assign Symbol Expr
-  | Print Expr
+  = Decl Types Symbol Expr SourcePos
+  | Assign Symbol Expr     SourcePos
+  | Print Expr             SourcePos
   deriving (Show,Eq)
 
 instance A0 < A1 where
   upcast = OfA0
 
 
+mkPrint :: Parser Expr -> Parser A0
+mkPrint arg = getPosition <**> (Print <$> (keyword "print" *> parens arg))
+
+mkDecl :: Parser Types -> Parser Symbol -> Parser Expr -> Parser A0
+mkDecl pType ident expr = getPosition <**> (Decl <$> pType <*> ident <* token (string ":=") <*> expr)
+
+mkAssign :: Parser Symbol -> Parser Expr -> Parser A0
+mkAssign ident expr = getPosition <**> (Assign <$> ident <* token (string ":=") <*> expr)
+
 a0 :: Parser A0
 a0 
-  =   Print <$> (keyword "print" *> expr)
-  <|> Decl <$> pType <*> ident <* token (string ":=") <*> expr
-  <|> Assign <$> ident <* token (string ":=") <*> expr
+  =   mkPrint expr
+  <|> mkDecl pType ident expr
+  <|> mkAssign ident expr
 
 
 action :: ParsecT Symbol () Identity A0 
@@ -225,11 +291,11 @@ actions = manyTill (action <* skipLinesAndComments) (eot <|> eof)
 
 parserT2AdtT :: Types -> ZT.Types
 parserT2AdtT = \case
-  OfTypes0 Z         -> ZT.Value ZT.Z
-  OfTypes0 (Lazy t)  -> ZT.Lazy (parserT2AdtT t)
-  OfTypes0 (LazyS t) -> ZT.LazyS (parserT2AdtT t)
-  Arrow t1 t2 -> ZT.Value (parserT2AdtT (OfTypes0 t1) ZT.:-> parserT2AdtT t2)
-  
+  OfTypes0 (Z _)       -> ZT.Value ZT.Z
+  OfTypes0 (Lazy t _)  -> ZT.Lazy (parserT2AdtT t)
+  OfTypes0 (LazyS t _) -> ZT.LazyS (parserT2AdtT t)
+  Arrow t1 t2 _ -> ZT.Value (parserT2AdtT (OfTypes0 t1) ZT.:-> parserT2AdtT t2)
+   
 -----------------------------------------
 -- Run parser
 -----------------------------------------

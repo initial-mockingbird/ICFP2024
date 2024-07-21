@@ -118,12 +118,6 @@ type (~>) a b = Value (a :-> b)
 -- Utility functions
 --------------------------
 
--- | Yields the RType of a type.
-rvalueT :: Types -> Types
-rvalueT t = case t of
-  (Value a) -> Value a
-  (Lazy a)  -> a
-  (LazyS a) -> LazyS a
 
 -- | Implicit equality.
 decideEquality' :: forall k (a :: k) (b :: k).  (SDecide k, SingI a, SingI b) => Maybe (a :~: b) 

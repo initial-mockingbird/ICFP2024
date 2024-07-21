@@ -30,10 +30,11 @@
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE QuantifiedConstraints      #-}
+{-# LANGUAGE ImpredicativeTypes         #-}
 --{-# LANGUAGE TypeAbstractions #-}
 
 {-|
-Module      : Zilly Expression
+Module      : Zilly.Expression
 Description : Defines the contexts of expressions and its rvalue rules.
 Copyright   : (c) Daniel Pinto, 2024
                   Enzo Alda, 2024
@@ -46,37 +47,40 @@ Portability : POSIX
 module Zilly.Expressions where
 
 import Utilities.LensM
-import Utilities.ShowM
+import Utilities.TypedMap
 import Zilly.Types
 import Zilly.ADT
-import Zilly.Contexts
 import Zilly.RValue
+import Zilly.Upcast
+import Zilly.Interpreter
+
 import Control.Monad.IO.Class
 import Data.Kind (Type)
 import Data.Typeable hiding (cast)
 import Control.Monad.Reader 
 import Control.Monad
-import Unsafe.Coerce (unsafeCoerce)
 
 import Control.Applicative
-import Data.Singletons.TH (genSingletons, promote, singletons, promoteEqInstances, singEqInstances, singDecideInstances)
-import Prelude.Singletons (fromSing, withSomeSing, Sing, SingI(sing), singByProxy, withSing, demote, SomeSing (SomeSing), withSingI)
-import Data.Maybe.Singletons hiding (MapMaybe)
-import Control.Applicative.Singletons
-import Data.Eq.Singletons
-import Data.Tuple.Singletons
-import Data.Bool.Singletons
-import Debug.Trace (trace)
-import Data.Functor.Identity
-import Data.Singletons.Decide
-import Data.Either (fromRight)
+import Prelude.Singletons (SingI,SMaybe(..),sing,withSingI)
 
+import Data.Singletons.Decide
+import Data.Function.Singletons
+import Debug.Trace (trace)
 
 
 
 --------------------------
 -- Aux Functions
 --------------------------
+
+-- | Bottom value. Useful for pattern synonyms.
+bottom :: Void
+bottom = error "Attempt to evaluate void"
+
+-- | Absurd proof. Useful for pattern synonyms.
+absurd :: Void -> a
+absurd m = case m of {}
+
 
 connector :: Int -> Bool
 connector = (> 0)
@@ -86,514 +90,422 @@ rConnector = \case
   True -> 1
   False -> -1
 
-cTrue :: (ShowM m env, MonadIO m, MonadReader env m, Alternative m) => E ExprTag env m (Value Z)
+cTrue ::  forall. E ExprTag (Value Z)
 cTrue = ValE  (rConnector True)
 
-cFalse :: (ShowM m env, MonadIO m, MonadReader env m, Alternative m) => E ExprTag env m (Value Z)
+cFalse :: E ExprTag (Value Z)
 cFalse = ValE (rConnector False)
 
-cvalue :: forall a (env :: Type) (m :: Type -> Type). 
-  (MonadReader env m, Alternative m) => LensM m env a -> m a
+cvalue :: forall {env} a  (m :: Type -> Type). 
+  (Gamma m ~ env, MonadReader env m) => LensM m a -> m a
 cvalue l = ask >>= viewM l
   
+
 --------------------------
--- Expression language
+-- Tag
 --------------------------
 
 data ExprTag
 
-type ShowMContextE m env = ShowMContext (E ExprTag) m env
+type instance AssocCtxMonad ExprTag = TaggedInterpreter ExprTag
+type instance Gamma (TaggedInterpreter ExprTag) = TypeRepMap ExprTag
 
-bottom :: Void
-bottom = error "Attempt to evaluate void"
+--------------------------
+-- Expression language
+--------------------------
 
-absurd :: Void -> a
-absurd m = case m of {}
 
-type instance ValX ExprTag env m = 
-  ( Proof2' ShowM m env
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  )
-pattern ValE :: (ShowM m env, MonadIO m, MonadReader env m, Alternative m) => Int -> E ExprTag env m (Value Z) 
+
+
+
+
+
+type instance ValX ExprTag = Void
+pattern ValE ::  Int -> E ExprTag (Value Z) 
 pattern ValE n <- Val _ n
-  where ValE n = Val (P2',P',PMR,P') n
+  where ValE n = Val bottom n
 
-type instance ValueCX ExprTag env m a =
-  ( Proof2' ShowM m env 
-  , Proof2' ShowM m (E ExprTag env m (Value a))
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  ) 
-pattern ValueCE :: 
-  ( ShowM m env
-  , ShowM m (E ExprTag env m (Value a))
-  , MonadIO m
-  , MonadReader env m
-  , Alternative m
-  ) 
-  => (E ExprTag env m (Value a), env) -> E ExprTag env m (Value a)
+
+
+type instance ValueCX ExprTag a = Void
+pattern ValueCE :: (E ExprTag (Value a), Gamma (AssocCtxMonad ExprTag)) -> E ExprTag (Value a)
 pattern ValueCE n <- ValueC _ n
-  where ValueCE n = ValueC (P2',P2',P',PMR,P') n
+  where ValueCE n = ValueC bottom n
 
-type instance ClosureX ExprTag env m a =
-  ( Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  ) 
-pattern ClosureE :: 
-  ( ShowM m env
-  , forall a. ShowM m (E ExprTag env m a)
-  , MonadIO m
-  , MonadReader env m
-  , Alternative m
-  ) 
-  => (E ExprTag env m a,env) -> E ExprTag env m a 
+
+type instance ClosureX ExprTag a = Void
+pattern ClosureE :: (E ExprTag a,Gamma (AssocCtxMonad ExprTag)) -> E ExprTag a 
 pattern ClosureE n <- Closure _ n
-  where ClosureE n = Closure (P2',PFA,P',PMR,P') n
+  where ClosureE n = Closure bottom n
 
 
-type instance VarX ExprTag env m a =
-  ( Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  ) 
-pattern VarE :: 
-  ( ShowM m env
-  , forall a. ShowM m (E ExprTag env m a)
-  , MonadIO m
-  , MonadReader env m
-  , Alternative m
-  ) 
-  => LensM m env (E ExprTag env m a) -> E ExprTag env m a 
+type instance VarX ExprTag env = Void
+pattern VarE :: LensM (AssocCtxMonad ExprTag) (E ExprTag a) -> E ExprTag a
 pattern VarE n <- Var _ n
-  where VarE n = Var (P2',PFA,P',PMR,P') n
+  where VarE n = Var bottom n
 
-type instance DeferX ExprTag env m a =
-  ( Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  , ProofRV RValue (E ExprTag env m) a m
-  , ProofS SingI a
-  , ProofS SingI (RValueT (E ExprTag env m) a)
-  , Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
+
+type instance DeferX ExprTag a =
+  ( Proof (RValue ExprTag) a
+  , Proof SingI a
+  , Proof SingI (RValueT a)
   )
 pattern DeferE :: 
-  ( MonadIO m
-  , MonadReader env m
-  , Alternative m
-  , RValue (E ExprTag env m) a m
+  ( RValue ExprTag a
   , SingI a
-  , SingI (RValueT (E ExprTag env m) a)
-  , ShowM m env
-  , forall a. ShowM m (E ExprTag env m a)
+  , SingI (RValueT a)
   ) 
-  => E ExprTag env m a -> E ExprTag env m (Lazy a) 
+  => E ExprTag a -> E ExprTag (Lazy a) 
 pattern DeferE n <- Defer _ n
-  where DeferE n = Defer (P',PMR,P',PRV,PS,PS,P2',PFA) n
+  where DeferE n = Defer (P,P,P) n
 
-type instance FormulaX ExprTag env m a = 
-  ( Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  , Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
-  )
-pattern FormulaE ::
-  ( MonadIO m
-  , MonadReader env m
-  , Alternative m
-  , ShowM m env
-  , forall a. ShowM m (E ExprTag env m a)
-  ) 
-  => LensM m env (E ExprTag env m a)-> E ExprTag env m (Lazy a) 
+
+type instance FormulaX ExprTag a = Void
+pattern FormulaE :: LensM (AssocCtxMonad ExprTag) (E ExprTag a) -> E ExprTag (Lazy a)
 pattern FormulaE n <- Formula _ n
-  where FormulaE n = Formula (P',PMR,P',P2',PFA) n
+  where FormulaE n = Formula bottom n
 
-type instance ExpX ExprTag env m a = Void
-pattern ExpE :: Void -> E ExprTag env m a
+
+type instance ExpX ExprTag a = Void
+pattern ExpE :: Void -> E ExprTag a
 pattern ExpE v <- Exp v
   where ExpE v = absurd v
 
-type instance LambdaCX ExprTag env m a b =
-  ( Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  , ProofRV RValue (E ExprTag env m) b m
-  , Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
-  )
+
+type instance LambdaCX ExprTag a b = Proof (RValue ExprTag) b
 pattern LambdaCE :: 
-  ( MonadIO m
-  , MonadReader env m
-  , Alternative m
-  , RValue (E ExprTag env m) b m
-  , ShowM m env
-  , forall a. ShowM m (E ExprTag env m a)
+  ( RValue ExprTag b
   )
-  => (env, LensM m env (E ExprTag env m a), E ExprTag env m b) -> E ExprTag env m (a ~> b)
+  => (Gamma (AssocCtxMonad ExprTag), LensM (AssocCtxMonad ExprTag) (E ExprTag a), E ExprTag b) 
+  -> E ExprTag (a ~> b)
 pattern LambdaCE n <- LambdaC _ n
-  where LambdaCE n = LambdaC (P',PMR,P',PRV,P2',PFA) n
+  where LambdaCE n = LambdaC P n
 
-type instance SubtypedX ExprTag env m a b =
-  ( ProofUB (RValueT (E ExprTag env m) a) b b
-  , ProofS SingI a
-  , ProofS SingI b
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  , ProofRV RValue (E ExprTag env m) a m
-  , ProofRV RValue (E ExprTag env m) b m
+
+type instance SubtypedX ExprTag a b =
+  ( Proof ((~) (UpperBound (RValueT a) b)) (Just b)
+  , Proof SingI a
+  , Proof SingI b
+  , Proof (RValue ExprTag) a
+  , Proof (RValue ExprTag) b
   )
-{- pattern SubtypedE :: 
-  ( UpperBound (RValueT (E ExprTag env m) a) b ~ Just b
+pattern SubtypedE :: forall b. (SingI b, RValue ExprTag b) => forall a. 
+  ( UpperBound (RValueT a) b ~ Just b
   , SingI a
-  , SingI b
-  , RValue (E ExprTag env m) a
-  , RValue (E ExprTag env m) b
-  )
-  => E ExprTag env m a -> E ExprTag env m b
-pattern SubtypedE n <- Subtyped _ n
-  where SubtypedE n = Subtyped (PUB,PS,PS,PRV,PRV) n -}
+  , RValue ExprTag a
+  ) => E ExprTag a -> E ExprTag b
+--pattern SubtypedE n = Subtyped (P,P,P,P,P) n
+pattern SubtypedE n <- Subtyped (P,P,P,P,P) n
+  where SubtypedE n = Subtyped (P,P,P,P,P) n
 
-type instance MinusX ExprTag env m a b = 
-  ( Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  , ProofRV RValue (E ExprTag env m) a m
-  , ProofRV RValue (E ExprTag env m) b m
-  , ProofEQ (~) (RValueT (E ExprTag env m) a) (Value Z)
-  , ProofEQ (~) (RValueT (E ExprTag env m) b) (Value Z)
-  , Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
+
+
+
+type instance MinusX ExprTag a b = 
+  ( Proof (RValue ExprTag) a
+  , Proof (RValue ExprTag) b
+  , Proof ((~) (RValueT a)) (Value Z)
+  , Proof ((~) (RValueT b)) (Value Z)
   )
-{- pattern MinusE ::
-  ( RValue (E ExprTag env m) a
-  , RValue (E ExprTag env m) b
-  , RValueT (E ExprTag env m) a ~ Value Z
-  , RValueT (E ExprTag env m) b ~ Value Z
-  , ShowM m env
-  , forall a. ShowM m (E ExprTag env m a)
+
+pattern MinusE :: () =>
+  ( RValue ExprTag a
+  , RValue ExprTag b
+  , RValueT a ~ Value Z
+  , RValueT  b ~ Value Z
   ) 
-  => E ExprTag env m a -> E ExprTag env m b -> E ExprTag env m (Value Z)
-pattern MinusE a b <- Minus _ a b
-  where MinusE a b = Minus (PRV,PRV,PEQ,PEQ,P2',PFA) a b -}
+  => E ExprTag a -> E ExprTag b -> E ExprTag (Value Z)
+pattern MinusE a b <- Minus (P,P,P,P) a b
+  where MinusE a b = Minus (P,P,P,P) a b
 
-type instance LessX ExprTag env m a b =
-  ( ProofRV RValue (E ExprTag env m) a m
-  , ProofRV RValue (E ExprTag env m) b m
-  , ProofEQ (~) (RValueT (E ExprTag env m) a) (Value Z)
-  , ProofEQ (~) (RValueT (E ExprTag env m) b) (Value Z)
-  , Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
+type instance LessX ExprTag a b =
+  ( Proof (RValue ExprTag) a
+  , Proof (RValue ExprTag) b
+  , Proof ((~) (RValueT a)) (Value Z)
+  , Proof ((~) (RValueT b)) (Value Z)
   )
+pattern LessE :: () =>
+  ( RValue ExprTag a
+  , RValue ExprTag b
+  , RValueT a ~ Value Z
+  , RValueT  b ~ Value Z
+  ) 
+  => E ExprTag a -> E ExprTag b -> E ExprTag (Value Z)
+pattern LessE a b <- Less (P,P,P,P) a b
+  where LessE a b = Less (P,P,P,P) a b
 
-type instance LambdaX ExprTag env m a b =
-  ( ProofRV RValue (E ExprTag env m) b m
-  , ProofS SingI a
-  , ProofS SingI b
-  , Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m 
+type instance LambdaX ExprTag a b =
+  ( Proof (RValue ExprTag) b
+  , Proof SingI a
+  , Proof SingI b
   )
 pattern LambdaE :: 
-  ( RValue (E ExprTag env m) b m
+  ( RValue ExprTag b
   , SingI a
   , SingI b
-  , ShowM m env
-  , forall a. ShowM m (E ExprTag env m a)
-  , MonadIO m
-  , MonadReader env m
-  , Alternative m 
   )
-  => LensM m env (E ExprTag env m a) -> E ExprTag env m b -> E ExprTag env m (a ~> b)
+  => LensM (AssocCtxMonad ExprTag) (E ExprTag a) -> E ExprTag b  -> E ExprTag (a ~> b)
 pattern LambdaE n m <- Lambda _ n m
-  where LambdaE n m = Lambda (PRV,PS,PS,P2',PFA,P',PMR,P') n m
+  where LambdaE n m = Lambda (P,P,P) n m
 
-type instance AppX ExprTag env m f x arg b = 
-  ( ProofRV RValue (E ExprTag env m) f m
-  , ProofRV RValue (E ExprTag env m) x m
-  , ProofEQ (~) (RValueT (E ExprTag env m) f) (arg ~> b)
-  , ProofUB (RValueT (E ExprTag env m) x) arg arg
-  , ProofS SingI f
-  , ProofS SingI x
-  , ProofS SingI arg
-  , ProofS SingI b
-  , Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
+
+type instance AppX ExprTag f x arg b = 
+  ( Proof (RValue ExprTag) f
+  , Proof (RValue ExprTag) x
+  , Proof ((~) (RValueT f)) (arg ~> b)
+  , Proof ((~) (UpperBound (RValueT x) arg)) (Just arg)
+  , Proof SingI f
+  , Proof SingI x
+  , Proof SingI arg
+  , Proof SingI b
   )
+pattern AppE :: forall b. (SingI b) => forall f x arg . 
+    ( RValue ExprTag f
+    , RValue ExprTag x
+    , RValueT f ~ (arg ~> b)
+    , UpperBound (RValueT x) arg ~ Just arg
+    , SingI f
+    , SingI x
+    , SingI arg
+    ) => E ExprTag f -> E ExprTag x -> E ExprTag b
+pattern AppE f x = App (P,P,P,P,P,P,P,P) f x
+--pattern AppE f x <- App _ f x
+--  where AppE f x = App (P,P,P,P,P,P,P,P) f x 
 
-type instance IfX ExprTag env m x0 x1 x2 x3 = 
-  ( ProofRV RValue (E ExprTag env m) x0 m
-  , ProofRV RValue (E ExprTag env m) x1 m
-  , ProofRV RValue (E ExprTag env m) x2 m
-  , ProofEQ (~) (RValueT (E ExprTag env m) x0) (Value Z)
-  , ProofUB (RValueT (E ExprTag env m) x1) (RValueT (E ExprTag env m) x2) x3
-  , Proof2' ShowM m env
-  , ProofFA ShowM m (E ExprTag env m)
-  , Proof' MonadIO m
-  , ProofMR MonadReader env m
-  , Proof' Alternative m
-  , ProofS SingI x1
-  , ProofS SingI x2
-  , ProofS SingI x3
+
+type instance IfX ExprTag x0 x1 x2 x3 = 
+  ( Proof (RValue ExprTag) x0
+  , Proof (RValue ExprTag) x1
+  , Proof (RValue ExprTag) x2
+  , Proof ((~) (RValueT x0)) (Value Z)
+  , Proof ((~) (UpperBound (RValueT x1) (RValueT x2))) (Just x3)
+  , Proof SingI x1
+  , Proof SingI x2
+  , Proof SingI x3
   )
+pattern IfE :: forall x3. (SingI x3) => forall x0 x1 x2. 
+  ( RValue ExprTag x0
+  , RValue ExprTag x1
+  , RValue ExprTag x2
+  , RValueT x0 ~ Value Z
+  , UpperBound (RValueT x1) (RValueT x2) ~ Just x3
+  , SingI x1
+  , SingI x2
+  ) => E ExprTag x0 -> E ExprTag x1 -> E ExprTag x2 -> E ExprTag x3
+pattern IfE x0 x1 x2 <- If (P,P,P,P,P,P,P,P) x0 x1 x2
+  where IfE x0 x1 x2 = If (P,P,P,P,P,P,P,P) x0 x1 x2
 
-instance (ShowM m env,MonadIO m, Alternative m, MonadReader env m) => RValue (E ExprTag env m) (Value a) m where
-  type RValueT (E ExprTag env m) (Value a) = Value a
-  rvalue (ValE n) = pure (ValE n)
-  rvalue (ValueC (P2',P2',P',PMR,P') (e,gamma)) = localM (pure . const gamma) $ rvalue e
-  rvalue (Minus (P',PMR,P',PRV,PRV,PEQ,PEQ,P2',x@PFA) a b) = (,) <$> rvalue a <*> rvalue b >>= \case
+
+instance 
+  ( MonadIO (AssocCtxMonad ExprTag)
+  , Alternative (AssocCtxMonad ExprTag)
+  , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
+  ) => RValue ExprTag (Value a) where
+
+  rvalue (Val _ n)             = pure (ValE n)
+  rvalue (ValueC _ (e,gamma))  = localM (pure . const gamma) $ rvalue e
+  rvalue (Minus (P,P,P,P) a b) = (,) <$> rvalue a <*> rvalue b >>= \case
     (ValE a', ValE b') -> pure $ ValE (a' - b')
-    (a',b') ->  liftA2 (Minus (P',PMR,P',PRV,PRV,PEQ,PEQ,P2',x))  (rvalue a') (rvalue b') >>= rvalue
-  rvalue (Less (PRV,PRV,PEQ,PEQ,P2',x@PFA,P',PMR,P') a b) = (,) <$> rvalue a <*> rvalue b >>= \case
+    (a',b') ->  liftA2 MinusE  (rvalue a') (rvalue b') >>= rvalue
+  rvalue (Less (P,P,P,P) a b)  = (,) <$> rvalue a <*> rvalue b >>= \case
     (ValE a', ValE b') -> pure $ ValE (rConnector $ a' < b')
-    (a',b') -> liftA2 (Less (PRV,PRV,PEQ,PEQ,P2',x,P',PMR,P'))  (rvalue a') (rvalue b') >>= rvalue
-  rvalue (App @_ @f @x @b @arg (PRV,PRV,PEQ,PUB,p0@PS,PS,PS,PS,P2',p@PFA,P',PMR,P') f a) = rvalue f >>= \case
-    LambdaC _ (gamma, x, t) -> withSingIRType @x @(E ExprTag env m) $ do
-      arg <- rvalue a >>= \rva -> case upcast @_ @arg rva of
-        SameTypeUB rva'   -> pure rva'
-        RightUB rva'      -> pure rva'
-        LeftUB _       -> error "impossible case"
-        SomethingElseUB _ -> error "impossible case"
-      t'  <- localM (setMF x arg . const gamma) $ rvalue t
-      gamma' <- setMF x arg gamma
-      pure $ Closure (P2',p,P',PMR,P')  (t',gamma')
-    f' ->   rvalue $ App (PRV,PRV,PEQ,PUB,PS,PS,PS,PS,P2',p,P',PMR,P') f' a
-  rvalue (Var (P2',PFA,P',PMR,P') x) = rvalue <=< cvalue $ x
-  rvalue e@(If (PRV,PRV,PRV,PEQ,PUB,P2',PFA,P',PMR,P',PS,PS,PS) _ _ _)  = genRVIf e
-  rvalue (LambdaC c@(P',PMR,P',PRV,P2',PFA) gamma) = pure $ LambdaC c gamma
-  rvalue (Lambda c@(PRV,PS,PS,P2',p@PFA,P',PMR,P') x t) = do
+    (a',b') -> liftA2 LessE  (rvalue a') (rvalue b') >>= rvalue
+  rvalue (LambdaC P gamma)     = pure $ LambdaCE gamma
+  rvalue (Lambda (P,P,P) x t)  = do
     gamma <- ask
-    pure $ LambdaC (P',PMR,P',PRV,P2',p) (gamma,x,t)
-  rvalue (Closure (P2',PFA,P',PMR,P') (e,gamma)) = localM (pure . const gamma) $ rvalue e
-  rvalue (Subtyped @_ @_ @_ @e1 @e2 (PUB,PS,PS,P',PMR,P',PRV,PRV) e1) = do
-    --trace "rvaluing a subtyped" pure ()
-    e1' :: E ExprTag env m (RValueT (E ExprTag env m) e1)  <- withSingIRType @e1 @(E ExprTag env m) $ rvalue e1
-    let e1'' :: E ExprTag env m (RValueT (E ExprTag env m) e2) 
-          = withRVType @(E ExprTag env m) @m (sing @e1) 
-          $ withSingIRType @e1 @(E ExprTag env m)
-          $ withSingIRType @e2 @(E ExprTag env m)
-          $ withRVType @(E ExprTag env m) @m (sing @(RValueT (E ExprTag env m) e1)) 
-          $ withRVType @(E ExprTag env m) @m (sing @(RValueT (E ExprTag env m) e2)) 
-          $ rvaluePreservesST @(RValueT (E ExprTag env m) e1) @e2 @(E ExprTag env m)
-          $ Subtyped @_ @_ @_ @(RValueT (E ExprTag env m) e1) @(RValueT (E ExprTag env m)  e2) (PUB,PS,PS,P',PMR,P',PRV,PRV) e1'
-    pure e1''
+    pure $ LambdaCE (gamma,x,t)
+  rvalue e@(App {})      = genRVApp e
+  rvalue v@(Var {})      = genRVVar v
+  rvalue e@(Closure {})  = genRVClosure e
+  rvalue e@(Subtyped {}) = genRVSubtyped e
+  rvalue e@(If (P,P,P,P,P,P,P,P) _ _ _)  = genRVIf e
   rvalue (Exp v) = absurd v 
+  
 
-instance  (ShowM m env,MonadIO m, Alternative m, MonadReader env m) =>  RValue  (E ExprTag env m) (Lazy (Value a)) m where
-  type RValueT (E ExprTag env m) (Lazy (Value a)) = Value a
-  rvalue (Defer (P',PMR,P',PRV,PS,PS,P2',p@PFA) v) = do
-    gamma <- ask 
-    pure $ Closure (P2',p,P',PMR,P') (v,gamma)
-  rvalue (App @_ @f @x @b @arg (PRV,PRV,PEQ,PUB,PS,PS,PS,PS,P2',p@PFA,P',PMR,P') f a) = rvalue f >>= \case
-    LambdaC _ (gamma, x, t) -> withSingIRType @x @(E ExprTag env m) $ do
-      arg <- rvalue a >>= \rva -> case upcast @_ @arg rva of
-        SameTypeUB rva'   -> pure rva'
-        RightUB rva'      -> pure rva'
-        LeftUB _       -> error "impossible case"
-        SomethingElseUB _ -> error "impossible case"
-      t'  <- localM (setMF x arg . const gamma) $ rvalue t
-      gamma' <- setMF x arg gamma
-      pure $ Closure (P2',p,P',PMR,P')  (t',gamma')
-    f' -> rvalue $ App (PRV,PRV,PEQ,PUB,PS,PS,PS,PS,P2',p,P',PMR,P') f' a
-  rvalue (Closure (P2',PFA,P',PMR,P') (e,gamma)) = localM (pure . const gamma) $ rvalue e
-  rvalue (Var (P2',PFA,P',PMR,P') x) = rvalue <=< cvalue $ x
-  rvalue e@(If (PRV,PRV,PRV,PEQ,PUB,P2',PFA,P',PMR,P',PS,PS,PS) _ _ _)  = genRVIf e
-  rvalue (Formula (P',PMR,P',P2',PFA) v) = cvalue v
-  rvalue (Subtyped @_ @_ @_ @e1 @e2 (PUB,PS,PS,P',PMR,P',PRV,PRV) e1) = do
-    --trace "rvaluing a subtyped" pure ()
-    e1' :: E ExprTag env m (RValueT (E ExprTag env m) e1)  <- withSingIRType @e1 @(E ExprTag env m) $ rvalue e1
-    let e1'' :: E ExprTag env m (RValueT (E ExprTag env m) e2) 
-          = withRVType @(E ExprTag env m) @m (sing @e1) 
-          $ withSingIRType @e1 @(E ExprTag env m)
-          $ withSingIRType @e2 @(E ExprTag env m)
-          $ withRVType @(E ExprTag env m) @m (sing @(RValueT (E ExprTag env m) e1)) 
-          $ withRVType @(E ExprTag env m) @m (sing @(RValueT (E ExprTag env m) e2)) 
-          $ rvaluePreservesST @(RValueT (E ExprTag env m) e1) @e2 @(E ExprTag env m)
-          $ Subtyped @_ @_ @_ @(RValueT (E ExprTag env m) e1) @(RValueT (E ExprTag env m) e2) (PUB,PS,PS,P',PMR,P',PRV,PRV) e1'
-    pure e1''
-  rvalue (Exp v) = absurd v 
+instance  
+  ( MonadIO (AssocCtxMonad ExprTag)
+  , Alternative (AssocCtxMonad ExprTag)
+  , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
+  ) => RValue ExprTag (Lazy (Value a)) where
+    rvalue (Defer (P,P,P) v) = genRVDefer (DeferE v)
+    rvalue e@(App {})        = genRVApp e
+    rvalue e@(Closure {})    = genRVClosure e
+    rvalue v@(Var {})        = genRVVar v
+    rvalue (Formula _ e)     = cvalue e
+    rvalue e@(Subtyped {})   = genRVSubtyped e
+    rvalue e@(If (P,P,P,P,P,P,P,P) _ _ _)  = genRVIf e
+    rvalue (Exp v)           = absurd v 
 
+instance 
+  ( MonadIO (AssocCtxMonad ExprTag)
+  , Alternative (AssocCtxMonad ExprTag)
+  , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
+  ) =>  RValue ExprTag(Lazy (Lazy a)) where 
+    rvalue (Defer (P,P,P) v) = genRVDefer (DeferE v)
+    rvalue e@(App {})        = genRVApp e
+    rvalue e@(Closure {})    = genRVClosure e
+    rvalue v@(Var {})        = genRVVar v
+    rvalue (Formula _ e)     = cvalue e
+    rvalue e@(Subtyped {})   = genRVSubtyped e
+    rvalue e@(If (P,P,P,P,P,P,P,P) _ _ _)  = genRVIf e
+    rvalue (Exp v)           = absurd v 
 
-instance  (ShowM m env,MonadIO m, Alternative m, MonadReader env m) =>  RValue (E ExprTag env m) (Lazy (Lazy a)) m where 
-  type RValueT (E ExprTag env m) (Lazy (Lazy a)) = Lazy a
-  rvalue (Defer (P',PMR,P',PRV,PS,PS,P2',p@PFA) v) = do
-    gamma <- ask 
-    pure $ Closure (P2',p,P',PMR,P') (v,gamma)
-  rvalue (App @_ @f @x @b @arg (PRV,PRV,PEQ,PUB,PS,PS,PS,PS,P2',p@PFA,P',PMR,P') f a) = rvalue f >>= \case
-    LambdaC _ (gamma, x, t) -> withSingIRType @x @(E ExprTag env m) $ do
-      arg <- rvalue a >>= \rva -> case upcast @_ @arg rva of
-        SameTypeUB rva'   -> pure rva'
-        RightUB rva'      -> pure rva'
-        LeftUB _       -> error "impossible case"
-        SomethingElseUB _ -> error "impossible case"
-      t'  <- localM (setMF x arg . const gamma) $ rvalue t
-      gamma' <- setMF x arg gamma
-      pure $ Closure (P2',p,P',PMR,P')  (t',gamma')
-    f' -> rvalue $ App (PRV,PRV,PEQ,PUB,PS,PS,PS,PS,P2',p,P',PMR,P') f' a
-  rvalue (Closure (P2',PFA,P',PMR,P') (e,gamma)) = localM (pure . const gamma) $ rvalue e
-  rvalue (Var (P2',PFA,P',PMR,P') x) = rvalue <=< cvalue $ x
-  rvalue e@(If (PRV,PRV,PRV,PEQ,PUB,P2',PFA,P',PMR,P',PS,PS,PS) _ _ _)  = genRVIf e
-  rvalue (Formula (P',PMR,P',P2',PFA) v) = cvalue v
-  rvalue (Subtyped @_ @_ @_ @e1 @e2 (PUB,PS,PS,P',PMR,P',PRV,PRV) e1) = do
-    --trace "rvaluing a subtyped" pure ()
-    e1' :: E ExprTag env m (RValueT (E ExprTag env m) e1)  <- withSingIRType @e1 @(E ExprTag env m) $ rvalue e1
-    let e1'' :: E ExprTag env m (RValueT (E ExprTag env m) e2) 
-          = withRVType @(E ExprTag env m) @m (sing @e1) 
-          $ withSingIRType @e1 @(E ExprTag env m)
-          $ withSingIRType @e2 @(E ExprTag env m)
-          $ withRVType @(E ExprTag env m) @m (sing @(RValueT (E ExprTag env m) e1)) 
-          $ withRVType @(E ExprTag env m) @m (sing @(RValueT (E ExprTag env m) e2)) 
-          $ rvaluePreservesST @(RValueT (E ExprTag env m) e1) @e2 @(E ExprTag env m)
-          $ Subtyped @_ @_ @_ @(RValueT (E ExprTag env m) e1) @(RValueT (E ExprTag env m) e2) (PUB,PS,PS,P',PMR,P',PRV,PRV) e1'
-    pure e1''
-  rvalue (Exp v) = absurd v 
 
 ------------------------------
 -- Generic R-Value Functions
 ------------------------------
 
 genRVar :: 
-  ( MonadIO m
-  , MonadReader env m
-  , Alternative m 
-  , ShowM m env
-  , forall a. ShowM m (E ExprTag env m a)
-  , RValue (E ExprTag env m) a m
-  , RValueT (E ExprTag env m) a ~ c
-  , SingI c
-  ) => E ExprTag env m a -> m (E ExprTag env m c)
-genRVar (Var (P2',PFA,P',PMR,P') x) = rvalue <=< cvalue $ x
+  ( MonadIO (AssocCtxMonad ExprTag)
+  , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
+  , RValue ExprTag a
+  , RValueT a ~ c
+  ) => E ExprTag a -> (AssocCtxMonad ExprTag) (E ExprTag c)
+genRVar (VarE x) = rvalue <=< cvalue $ x
 genRVar _ = undefined
 
-genRVIf ::forall {x4 :: Types} (m :: Type -> Type) env (x3 :: Types) .
-  ( MonadIO m
-  , MonadReader env m
-  , Alternative m 
-  , ShowM m env
-  , SingI x3
-  , RValue (E ExprTag env m) x3 m
-  , RValueT (E ExprTag env m) x3 ~ x4
+genRVIf ::forall {x4 :: Types} {m :: Type -> Type} (x3 :: Types) .
+  ( SingI x3
+  , RValue ExprTag x3
+  , RValueT x3 ~ x4
+  , AssocCtxMonad ExprTag ~ m
+  , MonadIO (AssocCtxMonad ExprTag)
+  , Alternative (AssocCtxMonad ExprTag)
+  , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
   )
-  => E ExprTag env m x3 -> m (E ExprTag env m x4)
-genRVIf (If @_ @_ @_ @(x0 :: Types) @(x1 :: Types) @(x2 :: Types) (PRV,PRV,PRV,PEQ,PUB,P2',x@PFA,P',PMR,P',PS,PS,PS) cond t f) 
-  = withSingIRType @x1 @(E ExprTag env m)
-  $ withSingIRType @x2 @(E ExprTag env m)
+  => E ExprTag x3 -> m (E ExprTag x4)
+genRVIf (If @_ @(x0 :: Types) @(x1 :: Types) @(x2 :: Types) (P,P,P,P,P,P,P,P) cond t f) 
+  = withSingIRType @x1
+  $ withSingIRType @x2
   $ rvalue cond >>= \case
     ValE (connector -> True) -> do 
       t' <- rvalue t
-      withSingIRType @x3 @(E ExprTag env m) $ case upcast @_ @x4 t' of
+      withSingIRType @x3 $ case upcast @_ @_ @x4  UpcastE t' of
         SameTypeUB t'' -> pure t''
         RightUB t'' -> pure t''
         LeftUB _ -> error "impossible case"
         SomethingElseUB _ -> error "impossible case"
         NonExistentUB -> error "impossible case"
     ValE (connector -> False) -> do 
-      f' :: E ExprTag env m c1 <- rvalue f
-      withSingIRType @x3 @(E ExprTag env m) $ case upcast @_ @x4 f' of
+      f' :: E ExprTag c1 <- rvalue f
+      withSingIRType @x3 $ case upcast @_ @_ @x4 UpcastE f' of
         SameTypeUB f'' -> pure f''
         RightUB f'' -> pure f''
         LeftUB _ -> error "impossible case"
         SomethingElseUB _ -> error "impossible case"
         NonExistentUB -> error "impossible case"
-    c' -> rvalue (If @ExprTag @env @m @(Value Z) @x1 @x2 (PRV,PRV,PRV,PEQ,PUB,P2',x,P',PMR,P',PS,PS,PS) c' t f)
+    c' -> rvalue (IfE c' t f)
 genRVIf _ = undefined
 
----------------------
--- Upcasting
----------------------
+genRVApp ::
+  ( MonadIO (AssocCtxMonad ExprTag)
+  , Alternative (AssocCtxMonad ExprTag)
+  , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
+  , RValue ExprTag b
+  ) => E ExprTag b -> (AssocCtxMonad ExprTag) (E ExprTag (RValueT b))
+genRVApp (App @_ @f @x @b @arg (P,P,P,P,P,P,P,P) f a) = rvalue f >>= \case
+    LambdaC _ (gamma, x, t) -> withSingIRType @x  $ do
+      arg <- rvalue a >>= \rva -> case upcast @ExprTag @_ @arg UpcastE rva of
+        SameTypeUB rva'   -> pure rva'
+        RightUB rva'      -> pure rva'
+        -- these two can only happen when the types are equal
+        -- but I have yet to find a stricter constraint that expresses this.
+        LeftUB _          -> error "impossible case"
+        SomethingElseUB _ -> error "impossible case"
+      t'  <- localM (setMF x arg . const gamma) $ rvalue t
+      gamma' <- setMF x arg gamma
+      pure $ ClosureE  (t',gamma')
+    f' ->   rvalue $ AppE f' a
+genRVApp _ = undefined
 
-data UpperBoundResults f a b where
-  NonExistentUB   :: (UpperBound a b ~ Nothing) => UpperBoundResults f a b 
-  SameTypeUB      :: (a ~ b, UpperBound a b ~ Just a) => f a -> UpperBoundResults f a b 
-  LeftUB          :: (UpperBound a b ~ Just a)  => f a -> UpperBoundResults f a b 
-  RightUB         :: (UpperBound a b ~ Just b)  => f b -> UpperBoundResults f a b 
-  SomethingElseUB :: forall {r :: Types} f (a :: Types) (b :: Types) . 
-    ( UpperBound a b ~ Just r
-    , SingI r
-    ) => f r -> UpperBoundResults f a b 
+genRVDefer :: 
+  ( RValue ExprTag a
+  , SingI a
+  , SingI (RValueT a)
+  , MonadReader (Gamma (AssocCtxMonad ExprTag)) m
+  ) => E ExprTag (Lazy a) -> m (E ExprTag a)
+genRVDefer (DeferE v) = do
+  gamma <- ask 
+  pure $ ClosureE (v,gamma)
+genRVDefer _ = undefined
 
-pattern SameTypeUBN ::  (a ~ b, UpperBound a b ~ Just a) => UpperBoundResults (Const ()) a b 
-pattern SameTypeUBN = SameTypeUB (Const ())
-  
+genRVClosure :: 
+  ( MonadReader (Gamma (AssocCtxMonad ctx)) (AssocCtxMonad ctx)
+  ,  RValue ctx a
+  ) => E ctx a -> AssocCtxMonad ctx (E ctx (RValueT a))
+genRVClosure (Closure _ (e,gamma)) = localM (pure . const gamma) $ rvalue e
+genRVClosure _  = undefined
 
-pattern LeftUBN ::  (UpperBound a b ~ Just a) => UpperBoundResults (Const ()) a b 
-pattern LeftUBN = LeftUB (Const ())
 
-pattern RightUBN ::  (UpperBound a b ~ Just b) => UpperBoundResults (Const ()) a b 
-pattern RightUBN = RightUB (Const ())
+genRVVar :: 
+  ( RValue ctx a
+  ,  MonadReader (Gamma (AssocCtxMonad ctx)) (AssocCtxMonad ctx)
+  ) => E ctx a -> AssocCtxMonad ctx (E ctx (RValueT a))
+genRVVar (Var _ x) = rvalue <=< cvalue $ x
+genRVVar _ = undefined
 
-pattern SomethingElseUBN :: 
-  ( UpperBound a b ~ Just r
-  , SingI r
-  ) => UpperBoundResults (Const ()) a b 
-pattern SomethingElseUBN = SomethingElseUB (Const ())
+genRVSubtyped ::
+  ( MonadIO (AssocCtxMonad ExprTag)
+  , Alternative (AssocCtxMonad ExprTag)
+  , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
+  ) => E ExprTag b -> (AssocCtxMonad ExprTag) (E ExprTag (RValueT b))
+genRVSubtyped (Subtyped @_ @e1 @e2 (P,P,P,P,P) e1) = do
+    --trace "rvaluing a subtyped" pure ()
+    e1' :: E ExprTag (RValueT  e1)  <- withSingIRType @e1 $ rvalue e1
+    let e1'' :: E ExprTag (RValueT e2) 
+          = withRVType @ExprTag (sing @e1) 
+          $ withSingIRType @e1
+          $ withSingIRType @e2
+          $ withRVType @ExprTag (sing @(RValueT e1)) 
+          $ withRVType @ExprTag (sing @(RValueT e2)) 
+          $ rvaluePreservesST @(RValueT e1) @e2 
+          $ SubtypedE e1'
+    pure e1''
+genRVSubtyped _ = undefined
 
-upcastable :: forall (a :: Types) (b :: Types) (env :: Type) (m :: Type -> Type). 
-  ( SingI a
+------------------------------
+-- How ExprTag upcasts.
+------------------------------
+
+type instance UpcastX ExprTag a b = 
+  ( Dict (SingI a)
+  , Dict (SingI b)
+  , Dict (CS (RValue ExprTag) ValueSym0 ) 
+  , Dict (CS (RValue ExprTag) (LazySym0 .@#@$$$ LazySym0))
+  , Dict (CS (RValue ExprTag) (LazySym0 .@#@$$$ ValueSym0))
+  )
+pattern UpcastE :: forall a b.
+  ( SingI a 
   , SingI b
-  , (ShowM m env,MonadIO m, Alternative m, MonadReader env m)
-  ) => UpperBoundResults (Const ()) a b
-upcastable 
-  = withSingIUBType @a @b 
-  $ case decideEquality (sing @a) (sing @b) of
-    Just Refl -> ubIsIdempotent @a $ SameTypeUBN
-    Nothing -> case sing @(UpperBound a b) of
-      SJust sub -> case decideEquality (sing @a) sub of
-        Just Refl -> LeftUBN
-        Nothing   -> case decideEquality (sing @b) sub of
-          Just Refl -> RightUBN
-          Nothing   
-            -> withRVType @(E ExprTag env m) @m  (sing @a)
-            $  rvalueIsPred @a
-            $  withSingI sub 
-            $  SomethingElseUBN @a @b
-      SNothing  -> NonExistentUB
+  , forall t. RValue ExprTag (Value t)
+  , forall t. RValue ExprTag (Lazy (Lazy t))
+  , forall t. RValue ExprTag (Lazy (Value t))
+  ) => UpcastX ExprTag a b
+pattern UpcastE  <-(Dict,Dict,Dict,Dict,Dict)
+  where UpcastE  = (Dict,Dict,Dict,Dict,Dict)
 
-upcast :: forall (a :: Types) (b :: Types) env m. 
-  ( SingI a
-  , SingI b
-  , MonadIO m
-  , MonadReader env m
-  , Alternative m 
-  , ShowM m env
-  ) => E ExprTag env m a  
-  -> UpperBoundResults (E ExprTag env m) a b
-upcast f
-  = withSingIUBType @a @b 
-  $ case decideEquality (sing @a) (sing @b) of
-    Just Refl -> ubIsIdempotent @a $ SameTypeUB f
-    Nothing -> case sing @(UpperBound a b) of
-      SJust @_ @n sub -> case decideEquality (sing @a) sub of
-        Just Refl -> LeftUB f
-        Nothing   -> case decideEquality (sing @b) sub of
-          Just Refl 
-            -> rvalueIsPred @a @(E ExprTag env m) 
-            $ withSingIRType @a @(E ExprTag env m)
-            $ ubIsTransitive' @(RValueT (E ExprTag env m) a) @a @b 
-            $ withRVType @(E ExprTag env m) @m (sing @a) 
-            $ withRVType @(E ExprTag env m) @m (sing @b) 
-            $ RightUB (Subtyped (PUB,PS,PS,P',PMR,P',PRV,PRV) f)
-          Nothing   
-            -> withRVType @(E ExprTag env m) @m (sing @a) 
-            $ withSingI sub
-            $ withRVType @(E ExprTag env m) @m (sing @n) 
-            $ subtyped'CTX @a @b @(E ExprTag env m) @m
-            $ SomethingElseUB (Subtyped (PUB,PS,PS,P',PMR,P',PRV,PRV) f)
-      SNothing  -> NonExistentUB
+
+instance Upcast ExprTag where
+  upcast :: forall a b. UpcastX ExprTag a b -> E ExprTag a -> UpperBoundResults (E ExprTag) a b
+  upcast (Dict,Dict,Dict,Dict,Dict) f 
+    = withSingIUBType @a @b 
+    $ case decideEquality (sing @a) (sing @b) of
+      Just Refl -> ubIsIdempotent @a $ SameTypeUB f
+      Nothing -> case sing @(UpperBound a b) of
+        SJust @_ @n sub -> case decideEquality (sing @a) sub of
+          Just Refl -> LeftUB f
+          Nothing   -> case decideEquality (sing @b) sub of
+            Just Refl 
+              -> rvalueIsPred @a
+              $ withSingIRType @a
+              $ ubIsTransitive' @(RValueT a) @a @b 
+              $ withRVType @ExprTag (sing @a) 
+              $ withRVType @ExprTag (sing @b) 
+              $ RightUB (SubtypedE f)
+            Nothing   
+              -> withRVType @ExprTag (sing @a) 
+              $ withSingI sub
+              $ withRVType @ExprTag (sing @n) 
+              $ subtyped'CTX @ExprTag @a @b 
+              $ SomethingElseUB (SubtypedE f)
+        SNothing  -> NonExistentUB

@@ -1,5 +1,7 @@
 {-# LANGUAGE NoStarIsType #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 {-|
 Module      : Utilities.LensM
 Description : "Lenses" that perform monadic actions
@@ -28,20 +30,22 @@ time being, this isn't a pressing issue.
 -}
 module Utilities.LensM where
 import Data.Kind (Type)
+import Control.Monad.Reader
 
+type family Gamma (m :: Type -> Type) :: Type
 
-data LensM (m :: Type -> Type) (s :: Type) (a :: Type) = LensM
-  { getL  :: s -> m a
-  , setL  :: s -> a -> m s
-  , setFL :: s -> a -> m s
+data LensM (m :: Type -> Type) (a :: Type) = LensM
+  { getL  ::  Gamma m -> m a
+  , setL  ::  Gamma m -> a -> m (Gamma m)
+  , setFL ::  Gamma m -> a -> m (Gamma m)
   , varNameM :: String
   }
 
-viewM :: LensM m s a -> s -> m a
+viewM ::LensM m a -> Gamma m -> m a
 viewM  = getL
 
-setM :: LensM m s a -> a -> s -> m s
+setM :: LensM m a -> a -> Gamma m -> m (Gamma m)
 setM = flip . setL
 
-setMF :: LensM m s a -> a -> s -> m s
+setMF :: LensM m a -> a -> Gamma m -> m (Gamma m)
 setMF = flip . setFL
