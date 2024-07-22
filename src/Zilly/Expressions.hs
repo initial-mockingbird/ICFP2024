@@ -66,6 +66,7 @@ import Prelude.Singletons (SingI,SMaybe(..),sing,withSingI)
 import Data.Singletons.Decide
 import Data.Function.Singletons
 import Debug.Trace (trace)
+import Utilities.ShowM
 
 
 
@@ -326,21 +327,7 @@ instance
   ( MonadIO (AssocCtxMonad ExprTag)
   , Alternative (AssocCtxMonad ExprTag)
   , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
-  ) => RValue ExprTag (Lazy (Value a)) where
-    rvalue (Defer (P,P,P) v) = genRVDefer (DeferE v)
-    rvalue e@(App {})        = genRVApp e
-    rvalue e@(Closure {})    = genRVClosure e
-    rvalue v@(Var {})        = genRVVar v
-    rvalue (Formula _ e)     = cvalue e
-    rvalue e@(Subtyped {})   = genRVSubtyped e
-    rvalue e@(If (P,P,P,P,P,P,P,P) _ _ _)  = genRVIf e
-    rvalue (Exp v)           = absurd v 
-
-instance 
-  ( MonadIO (AssocCtxMonad ExprTag)
-  , Alternative (AssocCtxMonad ExprTag)
-  , MonadReader (Gamma (AssocCtxMonad ExprTag)) (AssocCtxMonad ExprTag)
-  ) =>  RValue ExprTag(Lazy (Lazy a)) where 
+  ) => RValue ExprTag (Lazy a) where
     rvalue (Defer (P,P,P) v) = genRVDefer (DeferE v)
     rvalue e@(App {})        = genRVApp e
     rvalue e@(Closure {})    = genRVClosure e
@@ -509,3 +496,28 @@ instance Upcast ExprTag where
               $ subtyped'CTX @ExprTag @a @b 
               $ SomethingElseUB (SubtypedE f)
         SNothing  -> NonExistentUB
+
+
+---------------------------
+-- Show instances
+---------------------------
+
+instance Monad m => ShowM m (E ExprTag a) where
+  showsPrecM p = \case
+    Val _ n -> showsPrecM p n
+    ValueC _ (e,env) -> showStringM "<" <=< showStringM "," <=< showsPrecM p e <=< showStringM ">" -- showStringM "<" <=< showsPrecM 10 env <=< showStringM "," <=< showsPrecM p e <=< showStringM ">"
+    Var _ x -> showsPrecM p . UT . varNameM $ x
+    Minus _ a b -> showParenM (p > 6) $ showsPrecM 6 a <=< showStringM " - " <=< showsPrecM 7 b
+    Less _ a b -> showParenM (p > 10) $ showsPrecM 4 a <=< showStringM " < " <=< showsPrecM 5 b
+    If _ c t f -> showParenM (p > 10) $ showStringM "if " <=< showsM c <=< showStringM " then " <=< showsM t <=< showStringM " else " <=< showsM f
+    Lambda _ x t -> showParenM (p > 9) $ showStringM "λ " <=< showsPrecM 10 (UT . varNameM $ x) <=< showStringM " -> " <=<  showsPrecM 0 t
+    LambdaC _ (env,x,t) -> showParenM (p > 9) $  showStringM "λ " <=< showsPrecM 10 (UT . varNameM $ x) <=< showStringM " -> " <=< showsPrecM 10 t -- -> showParenM (p > 9) $ showsPrecM 10 env <=<  showStringM "λ " <=< showsPrecM 10 (UT . varNameM $ x) <=< showStringM " -> " <=< showsPrecM 10 t
+ 
+    App _ f a -> showParenM (p > 10) $ showsPrecM 10 f <=< showCharM ' ' <=< showsPrecM 11 a
+    Defer _ v -> showStringM "'" <=< showsPrecM 11 v <=< showStringM "'"
+    Closure _ (e,env) -> showsPrecM 10 e -- showCharM '<' <=< showsPrecM 10 e <=< showStringM  ", " <=< showsPrecM 10 env <=< showCharM '>'
+    Formula _ e -> showStringM "Formula " <=< (showsPrecM 11 . UT . varNameM) e
+    -- FEval  _ -> undefined
+    -- DeferS _ -> undefined
+    Subtyped _ e -> showStringM "Subtyped " <=< showsPrecM 10 e
+    Exp _ -> showStringM "no additional extensions"

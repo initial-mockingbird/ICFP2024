@@ -16,6 +16,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Zilly.Action where
 
@@ -137,6 +138,21 @@ instance  Execute ActionTag  where
     pure (Print rve, gamma)
 
 
+--------------------------
+-- Show instances
+--------------------------
+
+instance Monad m => ShowM m (A ActionTag a) where 
+  showsPrecM p = \case
+    (:=) @_ @ltype x e
+      -> showStringM (withShow @ltype)
+      <=< showCharM ' '
+      <=< (showsPrecM p . UT . varNameM) x
+      <=< showStringM " := "
+      <=< showsM e
+    (:=.) x e -> (showsPrecM p . UT . varNameM ) x <=< showStringM " := " <=< showsM e
+    Print e   -> showStringM "print " <=< showsPrecM 10 e
+    OfExpr e  -> showsM e
 {-
 execProgram :: forall t m a.
   ( Traversable t

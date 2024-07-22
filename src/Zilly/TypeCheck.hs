@@ -64,7 +64,9 @@ import Control.Monad (MonadPlus(mzero))
 import Text.Parsec (SourcePos)
 import Data.Singletons.Decide
 
-data Some f = forall  (a :: Types). SingI a => MkSome (f a)
+type Some :: forall k. (k -> Type) -> Type 
+data Some (f :: k -> Type) where
+    MkSome :: forall {k} f (a :: k). SingI a => f a -> Some f
 
 type TypeCheckEnv = Map Symbol Types
 type ErrorLog = [TypeCheckErrors]
@@ -88,15 +90,15 @@ newtype TCM a = TCM { unTCM :: ReaderT TypeCheckEnv (MaybeT (Writer ErrorLog) ) 
 
 
 
-class TypeCheck actx e where
-  type TCC actx :: Types -> Type
-  typeCheck :: forall {f} {ctx}.
+class TypeCheck actx e ret | e -> ret where
+  type TCC actx ret :: ret -> Type
+  typeCheck :: forall {k} {f} {ctx}.
     ( AssocActionTag actx ~ ctx
-    , TCC actx ~ f
+    , TCC actx ret ~ f
     ) => e -> TCM (Some f,TypeCheckEnv)
 
-instance TypeCheck ActionTag P.Atom where
-  type TCC ActionTag  = E ExprTag
+instance TypeCheck ActionTag P.Atom Types where
+  type TCC ActionTag  Types = E ExprTag
   typeCheck (P.Val s _) = do
     env <- ask
     pure (MkSome $  ValE s,env)
@@ -110,7 +112,7 @@ instance TypeCheck ActionTag P.Atom where
         tell [SymbolNotDefined s pos] >> empty
   typeCheck (P.Parens e _) = typeCheck @ActionTag e
   typeCheck (P.Defer e _) = do
-    (MkSome @m @a a,env) <- typeCheck @ActionTag e
+    (MkSome @_ @a a,env) <- typeCheck @ActionTag e
     withSingIRType @a
       $ withRVType @ExprTag (sing @a)
       $ pure (MkSome $ DeferE a,env)
@@ -154,8 +156,8 @@ instance TypeCheck ActionTag P.Atom where
       $ pure (MkSome $ LambdaE var body,env)
 
 
-instance TypeCheck ActionTag P.Term where
-  type TCC ActionTag  = E ExprTag
+instance TypeCheck ActionTag P.Term Types where
+  type TCC ActionTag Types = E ExprTag
 
   typeCheck (P.OfAtom a) = typeCheck @ActionTag a
   typeCheck (P.App f x pos) = do
@@ -179,18 +181,72 @@ instance TypeCheck ActionTag P.Term where
         _ -> tell [undefined] >> empty
       
 
-instance TypeCheck ActionTag P.Expr where
+instance TypeCheck ActionTag P.Expr Types where
+  type TCC ActionTag  Types = E ExprTag
+  typeCheck (P.OfTerm t) = typeCheck @ActionTag t
+  typeCheck (P.Minus e t pos) = do
+    env <- ask
+    (MkSome @_ @e' e',_) <- typeCheck @ActionTag e
+    (MkSome @_ @t' t',_) <- typeCheck @ActionTag t
+    withRVType @ExprTag (sing @e')
+      $ withRVType @ExprTag (sing @t')
+      $ withSingIRType @e'
+      $ withSingIRType @t'
+      $ case (decideEquality' @_ @(RValueT e') @(Value Z),decideEquality' @_ @(RValueT t') @(Value Z)) of
+        (Just Refl,Just Refl) -> pure (MkSome $ MinusE e' t',env)
+        (Nothing,Nothing) -> tell [undefined] >> empty
+        (Just Refl,Nothing) -> tell [undefined] >> empty
+        (Nothing,Just Refl) -> tell [undefined] >> empty
+  typeCheck (P.Less e t pos) = do
+    env <- ask
+    (MkSome @_ @e' e',_) <- typeCheck @ActionTag e
+    (MkSome @_ @t' t',_) <- typeCheck @ActionTag t
+    withRVType @ExprTag (sing @e')
+      $ withRVType @ExprTag (sing @t')
+      $ withSingIRType @e'
+      $ withSingIRType @t'
+      $ case (decideEquality' @_ @(RValueT e') @(Value Z),decideEquality' @_ @(RValueT t') @(Value Z)) of
+        (Just Refl,Just Refl) -> pure (MkSome $ LessE e' t',env)
+        (Nothing,Nothing) -> tell [undefined] >> empty
+        (Just Refl,Nothing) -> tell [undefined] >> empty
+        (Nothing,Just Refl) -> tell [undefined] >> empty
 
+instance TypeCheck ActionTag P.A0 () where
+  type TCC ActionTag () = A ActionTag
+  typeCheck (P.Decl t s e pos) = do
+    env <- ask
+    let env' = M.insert s (P.parserT2AdtT t) env
+    (MkSome @_ @e' e',_) <- local (const env') $ typeCheck @ActionTag e
+    -- never fails
+    (MkSome @_ @var (Var _ var),_) <- local (const env') $ typeCheck @ActionTag (P.Var s pos)
+    withSingIRType @e'
+      $ withSingIRType @var
+      $ withRVType @ExprTag (sing @e')
+      $ withRVType @ExprTag (sing @var)
+      $ case upcastable @(RValueT  var)  @(RValueT  e') @ExprTag of
+        SameTypeUB  _     -> pure (MkSome (var := e'),env')
+        LeftUB      _     -> pure (MkSome (var := e'),env')
+        RightUB     _     -> undefined
+        SomethingElseUB _ -> undefined
+        NonExistentUB        -> undefined
 
-{- type Env m = TypeRepMap m ExprTag
-instance TypeCheckE P.Expr where
-  
-  typeCheck (P.Minus a b) = do
-    (MkSome @m @a a',_) <- typeCheck a
-    (MkSome @_ @b b',_) <- typeCheck b
-
-    undefined 
-  typeCheck _ = undefined
-
-instance TypeCheckE P.Term
-instance TypeCheckE P.Atom -}
+  typeCheck (P.Assign s e pos) = do
+    env <- ask
+    (MkSome @_ @e' e',_) <- typeCheck @ActionTag e
+    -- never fails
+    (MkSome @_ @var (Var _ var),_) <- typeCheck @ActionTag (P.Var s pos)
+    withSingIRType @e'
+      $ withSingIRType @var
+      $ withRVType @ExprTag (sing @e')
+      $ withRVType @ExprTag (sing @var)
+      $ case upcastable @(RValueT  var)  @(RValueT  e') @ExprTag of
+        SameTypeUB  _     -> pure (MkSome (var := e'),env)
+        LeftUB      _     -> pure (MkSome (var := e'),env)
+        RightUB     _     -> undefined
+        SomethingElseUB _ -> undefined
+        NonExistentUB        -> undefined
+  typeCheck (P.Print e pos) = do
+    env <- ask
+    (MkSome @_ @e' e',_) <- typeCheck @ActionTag e
+    withRVType @ExprTag (sing @e')
+      $ pure (MkSome $ Print e',env)
