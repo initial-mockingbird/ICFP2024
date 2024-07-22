@@ -18,15 +18,16 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Zilly.Action where
+module Zilly.Classic.Action where
 
 import Utilities.LensM
-import Zilly.ADT
-import Zilly.Expressions
+import Zilly.ADT.Expression
+import Zilly.ADT.Action
+import Zilly.Classic.Expression
 import Zilly.Types
 import Zilly.RValue
 import Zilly.Upcast
-import Zilly.Interpreter
+import Zilly.Classic.Interpreter
 import Utilities.TypedMap
 import Utilities.ShowM
 import Control.Monad.Reader
@@ -41,59 +42,8 @@ import Data.Singletons (SingI(..))
 
 
 data ActionTag
-
-type family AssocActionTag (ctx :: Type) :: Type
 type instance AssocActionTag ActionTag = ExprTag
 
-
-infix 0 :=
-infix 0 :=.
-data A ctx r where
-  (:=) :: forall {m} {env} {ctx} actx (var :: Types) (e :: Types) .
-    ( AssocActionTag actx ~ ctx
-    , AssocCtxMonad ctx ~ m
-    , Gamma m ~ env
-    , SingI var
-    , SingI e
-    , RValue ctx var
-    , RValue ctx e
-    , UpperBound (RValueT var) (RValueT  e) ~ Just (RValueT var)
-    ) 
-    =>  LensM m (E ctx var) -> E ctx  e -> A actx '()
-  (:=.) :: forall {m} {env} {ctx} actx (var :: Types) (e :: Types) .
-    ( AssocActionTag actx ~ ctx
-    , AssocCtxMonad ctx ~ m
-    , Gamma m ~ env
-    , SingI var
-    , SingI e
-    , RValue ctx var
-    , RValue ctx e
-    , UpperBound (RValueT var) (RValueT  e) ~ Just (RValueT var)
-    ) 
-    =>  LensM m (E ctx var) -> E ctx  e -> A actx '()
-  Print :: forall {ctx} actx a.
-    ( AssocActionTag actx ~ ctx
-    , SingI a
-    , RValue ctx a
-    )
-    => E ctx a -> A actx '()
-  OfExpr :: forall {ctx} actx a.
-    ( AssocActionTag actx ~ ctx
-    , SingI a
-    , RValue ctx a
-    )
-    => E ctx a -> A actx '()
-  
-
-{- class SetEnv (m :: Type -> Type) (env :: Type) (a :: Type) where
-  setEnv :: Lensy env a -> a -> m b -> m b -}
-
-class Execute actx where
-  execInstruction :: forall {ctx} {m} {env} a. 
-    ( AssocActionTag actx ~ ctx
-    , AssocCtxMonad ctx ~ m
-    , Gamma m ~ env
-    ) => A actx a -> m (A actx a, env)
 
 instance  Execute ActionTag  where 
   execInstruction ((:=) @_ @var @e var e) 
@@ -153,6 +103,7 @@ instance Monad m => ShowM m (A ActionTag a) where
     (:=.) x e -> (showsPrecM p . UT . varNameM ) x <=< showStringM " := " <=< showsM e
     Print e   -> showStringM "print " <=< showsPrecM 10 e
     OfExpr e  -> showsM e
+  
 {-
 execProgram :: forall t m a.
   ( Traversable t

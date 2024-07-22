@@ -74,10 +74,10 @@ prefix :: (a -> b) -> Parser (b -> b) -> Parser a -> Parser b
 prefix wrap op p = op <*> prefix wrap op p <|> wrap <$> p
 
 parens :: Parser a -> Parser a
-parens = lexeme . between (token $ string "(") (token $ string ")")
+parens = lexeme . between (token $ char '(') (token $ char ')')
     
 quoted :: Parser a -> Parser a
-quoted = lexeme . between (token $ string "'") (token $ string "'")
+quoted = lexeme . between (token $ char '\'') (token $ char '\'')
 
 bracketed :: Parser a -> Parser a
 bracketed = lexeme . between (char '<') (char '>')

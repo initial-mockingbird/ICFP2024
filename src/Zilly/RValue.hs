@@ -34,7 +34,7 @@ Defines the RValue class, provides a way to inject them RValue types into a cont
 module Zilly.RValue where 
 
 import Zilly.Types
-import Zilly.ADT
+import Zilly.ADT.Expression
 import Data.Singletons.TH  hiding (Const)
 import Prelude.Singletons hiding (Const)
 import Data.Singletons.Decide

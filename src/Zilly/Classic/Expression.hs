@@ -34,8 +34,8 @@
 --{-# LANGUAGE TypeAbstractions #-}
 
 {-|
-Module      : Zilly.Expression
-Description : Defines the contexts of expressions and its rvalue rules.
+Module      : Zilly.Classic.Expression
+Description : Defines the contexts of expressions and its rvalue rules for classic zilly.
 Copyright   : (c) Daniel Pinto, 2024
                   Enzo Alda, 2024
 License     : GPL-3
@@ -44,15 +44,15 @@ Stability   : experimental
 Portability : POSIX
 
 -}
-module Zilly.Expressions where
+module Zilly.Classic.Expression where
 
 import Utilities.LensM
 import Utilities.TypedMap
 import Zilly.Types
-import Zilly.ADT
+import Zilly.ADT.Expression
 import Zilly.RValue
 import Zilly.Upcast
-import Zilly.Interpreter
+import Zilly.Classic.Interpreter
 
 import Control.Monad.IO.Class
 import Data.Kind (Type)
@@ -114,12 +114,6 @@ type instance Gamma (TaggedInterpreter ExprTag) = TypeRepMap ExprTag
 --------------------------
 -- Expression language
 --------------------------
-
-
-
-
-
-
 
 type instance ValX ExprTag = Void
 pattern ValE ::  Int -> E ExprTag (Value Z) 

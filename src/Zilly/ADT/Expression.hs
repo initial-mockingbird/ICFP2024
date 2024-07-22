@@ -14,7 +14,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 {-|
-Module      : Zilly.ADT
+Module      : Zilly.ADT.Expression
 Description : Main Expression Tree a la Trees that grow for Zilly
 Copyright   : (c) Daniel Pinto, 2024
                   Enzo Alda, 2024
@@ -35,7 +35,7 @@ Check
 https://www.microsoft.com/en-us/research/wp-content/uploads/2016/11/trees-that-grow.pdf
 
 -}
-module Zilly.ADT where
+module Zilly.ADT.Expression where
 
 import Zilly.Types
 import Utilities.LensM

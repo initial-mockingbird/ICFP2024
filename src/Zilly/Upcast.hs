@@ -25,7 +25,7 @@ Portability : POSIX
 module Zilly.Upcast where
   
 import Zilly.RValue
-import Zilly.ADT
+import Zilly.ADT.Expression
 import Zilly.Types
 import Utilities.LensM
 import Control.Applicative (Const(..))

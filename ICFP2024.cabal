@@ -33,9 +33,9 @@ library
       Interpreter2
       Lensy2
       Parser
+      Parser.Classic.ZillyParser
       Parser.ParserZ
       Parser.Utilities
-      Parser.ZillyParser
       ParserM2
       ParserZ
       ShowM
@@ -44,13 +44,14 @@ library
       Utilities.LensM
       Utilities.ShowM
       Utilities.TypedMap
-      Zilly.Action
-      Zilly.ADT
+      Zilly.ADT.Action
+      Zilly.ADT.Expression
+      Zilly.Classic.Action
+      Zilly.Classic.Expression
+      Zilly.Classic.Interpreter
+      Zilly.Classic.TypeCheck
       Zilly.Contexts
-      Zilly.Expressions
-      Zilly.Interpreter
       Zilly.RValue
-      Zilly.TypeCheck
       Zilly.Types
       Zilly.Upcast
   other-modules:
@@ -61,7 +62,8 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.7 && <5
+      HTF
+    , base >=4.7 && <5
     , containers
     , distributive
     , lens
@@ -84,7 +86,8 @@ executable ICFP2024-exe
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      ICFP2024
+      HTF
+    , ICFP2024
     , base >=4.7 && <5
     , containers
     , distributive
@@ -102,6 +105,7 @@ test-suite ICFP2024-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Parser.Classic.QuickCheck
       Paths_ICFP2024
   autogen-modules:
       Paths_ICFP2024
@@ -109,7 +113,8 @@ test-suite ICFP2024-test
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      ICFP2024
+      HTF
+    , ICFP2024
     , base >=4.7 && <5
     , containers
     , distributive

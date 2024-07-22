@@ -15,12 +15,11 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
-module Zilly.Interpreter where
+module Zilly.Classic.Interpreter where
 
 
 import Utilities.TypedMap
 import Utilities.LensM
-import Zilly.ADT
 import Zilly.RValue
 import Zilly.Types
 
@@ -29,11 +28,7 @@ import Control.Monad.Reader
 
 import Control.Monad
 import Control.Applicative (Alternative)
-
-
-{- type Env = TypeRepMap BaseInterpreter ExprTag
-newtype BaseInterpreter a = BI { runBI :: ReaderT Env IO a} 
-  deriving newtype (Functor,Applicative, Alternative, Monad,MonadIO,MonadFail,MonadReader Env) -}
+import Zilly.ADT.Expression
 
 newtype TaggedInterpreter ctx a = TI { runTI :: ReaderT (Gamma (AssocCtxMonad ctx)) IO a} 
   deriving newtype 
@@ -49,7 +44,8 @@ instance (Gamma (AssocCtxMonad ctx) ~ TypeRepMap ctx) =>  MonadReader (TypeRepMa
   ask = TI ask
   local f = TI . local f . runTI
 
-
+runTaggedInterpreter :: Gamma (AssocCtxMonad ctx) -> TaggedInterpreter ctx a ->  IO a
+runTaggedInterpreter env = flip runReaderT env . runTI
 
 {- 
 

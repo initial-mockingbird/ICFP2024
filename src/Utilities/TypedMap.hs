@@ -24,7 +24,7 @@ import Type.Reflection
 import Control.Lens.Lens
 import Utilities.LensM
 import Utilities.ShowM
-import Zilly.ADT 
+import Zilly.ADT.Expression
 import Zilly.Types
 
 import Debug.Trace

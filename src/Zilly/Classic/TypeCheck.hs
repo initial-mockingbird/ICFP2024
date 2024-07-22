@@ -33,17 +33,18 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Zilly.TypeCheck where
+module Zilly.Classic.TypeCheck where
 
 
-import Parser.ZillyParser qualified as P
+import Parser.Classic.ZillyParser qualified as P
 import Utilities.LensM
 import Utilities.TypedMap hiding (empty)
 import Utilities.ShowM
-import Zilly.ADT
-import Zilly.Action
-import Zilly.Expressions
-import Zilly.Interpreter hiding (Env)
+import Zilly.ADT.Expression
+import Zilly.ADT.Action
+import Zilly.Classic.Action
+import Zilly.Classic.Expression
+import Zilly.Classic.Interpreter hiding (Env)
 import Zilly.RValue
 import Zilly.Types
 import Zilly.Upcast
@@ -59,7 +60,7 @@ import qualified Data.Map as M
 import Control.Monad.Writer.CPS
 import Control.Monad.Error.Class
 import Control.Monad.Trans.Maybe
-import Parser.ZillyParser qualified as P
+import Parser.Classic.ZillyParser qualified as P
 import Control.Monad (MonadPlus(mzero))
 import Text.Parsec (SourcePos)
 import Data.Singletons.Decide

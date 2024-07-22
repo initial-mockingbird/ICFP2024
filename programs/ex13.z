@@ -7,7 +7,7 @@ Int -> Int -> Int eq  := /. x : Int => /. y : Int => if 0 < abs(x-y) then -1 els
 Int -> Int -> Int gt  := /. x : Int => /. y : Int => if 0 < 0 < x-y then 1 else -1;
 Int -> Int isZero := eq(0);
 Int -> Int -> Int -> Int fiboP := /. n2 : Int =>  /. n1 : Int => /. x  : Int => if isZero(x) then n1 else fiboP(n1)(plus(n1)(n2));
-Int -> Int fibo = fiboP(0)(1);
+Int -> Int fibo := fiboP(0)(1);
 print(fibo(1));
 print(fibo(2));
 print(fibo(3));
