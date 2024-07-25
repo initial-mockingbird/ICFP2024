@@ -1,4 +1,4 @@
-import Parser.Classic.QuickCheck as PCQC
+import Classic.Parser.QuickCheck as PCQC
 import Test.Framework.QuickCheckWrapper
 import Data.Foldable (traverse_)
 

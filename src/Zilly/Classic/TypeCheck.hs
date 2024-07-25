@@ -64,6 +64,7 @@ import Parser.Classic.ZillyParser qualified as P
 import Control.Monad (MonadPlus(mzero))
 import Text.Parsec (SourcePos)
 import Data.Singletons.Decide
+import Data.Traversable
 
 type Some :: forall k. (k -> Type) -> Type 
 data Some (f :: k -> Type) where
@@ -77,6 +78,9 @@ data TypeCheckErrors
   | NeedsLValue P.Expr SourcePos
   | TypeMismatch Types Types SourcePos
   | NonUnifiableTypes (P.Expr,Types,SourcePos) (P.Expr,Types,SourcePos)
+
+instance Show TypeCheckErrors where
+  show _ = "TODO: TypeCheckErrors show instance"
 
 newtype TCM a = TCM { unTCM :: ReaderT TypeCheckEnv (MaybeT (Writer ErrorLog) ) a }
   deriving newtype 
@@ -93,7 +97,7 @@ newtype TCM a = TCM { unTCM :: ReaderT TypeCheckEnv (MaybeT (Writer ErrorLog) ) 
 
 class TypeCheck actx e ret | e -> ret where
   type TCC actx ret :: ret -> Type
-  typeCheck :: forall {k} {f} {ctx}.
+  typeCheck :: forall {f} {ctx}.
     ( AssocActionTag actx ~ ctx
     , TCC actx ret ~ f
     ) => e -> TCM (Some f,TypeCheckEnv)
@@ -251,3 +255,18 @@ instance TypeCheck ActionTag P.A0 () where
     (MkSome @_ @e' e',_) <- typeCheck @ActionTag e
     withRVType @ExprTag (sing @e')
       $ pure (MkSome $ Print e',env)
+
+typeCheckProgram ::P.A1 -> TCM [A ActionTag '()]
+typeCheckProgram as = fmap snd  . forAccumM M.empty (f as) $ \env a -> do
+  (MkSome @_ @a' a',env') <- local (const env) $  typeCheck @ActionTag a
+  case decideEquality (sing @a') (sing @'()) of
+    Just Refl -> pure (env',a')
+    _ -> tell [undefined] >> empty
+  
+  where 
+    f (P.OfA0 a) = [a]
+    f (P.Seq a as) = a : as
+
+typeCheckProgram' ::P.A1 ->  (Maybe [A ActionTag '()],ErrorLog)
+typeCheckProgram' as 
+  = runWriter . runMaybeT . runReaderT (unTCM $ typeCheckProgram as) $ M.empty

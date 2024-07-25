@@ -47,22 +47,21 @@ type family AssocCtxMonad (ctx :: Type) :: (Type -> Type)
 
 {-| Zilly expression Language. |-}
 data  E (ctx :: Type) (a :: Types) where
-  Val     :: ValX ctx -> Int -> E ctx (Value Z)
-  Var     :: VarX ctx a -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx a
-  Minus   :: MinusX ctx a b -> E ctx a -> E ctx b -> E ctx (Value Z)
-  Less    :: LessX ctx a b -> E ctx a -> E ctx b -> E ctx (Value Z)
-  If      :: IfX ctx x0 x1 x2 x3 -> E ctx x0 -> E ctx x1 -> E ctx x2 -> E ctx x3
-  Lambda  :: LambdaX ctx a b -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx b  -> E ctx (a ~> b)
+  Val      :: ValX ctx            -> Int -> E ctx (Value Z)
+  Var      :: VarX ctx a          -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx a
+  Minus    :: MinusX ctx a b      -> E ctx a -> E ctx b -> E ctx (Value Z)
+  Less     :: LessX ctx a b       -> E ctx a -> E ctx b -> E ctx (Value Z)
+  If       :: IfX ctx x0 x1 x2 x3 -> E ctx x0 -> E ctx x1 -> E ctx x2 -> E ctx x3
+  Lambda   :: LambdaX ctx a b     -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx b  -> E ctx (a ~> b)
+  Defer    :: DeferX ctx a        -> E ctx a -> E ctx (Lazy a)
+  Formula  :: FormulaX ctx a      -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx (Lazy a)
+  Exp      :: ExpX ctx a          -> E ctx a
+  Closure  :: ClosureX ctx a      -> (E ctx a,Gamma (AssocCtxMonad ctx)) -> E ctx a
+  LambdaC  :: LambdaCX ctx a b    -> (Gamma (AssocCtxMonad ctx), LensM (AssocCtxMonad ctx) (E ctx a), E ctx b) -> E ctx (a ~> b)
+  ValueC   :: ValueCX ctx a       -> (E ctx (Value a), Gamma (AssocCtxMonad ctx)) -> E ctx (Value a)
+  Subtyped :: SubtypedX ctx a b   -> E ctx a -> E ctx b
   App     :: forall ctx f x b arg. AppX ctx f x arg b -> E ctx f -> E ctx x -> E ctx b
-  Defer   :: DeferX ctx a -> E ctx a -> E ctx (Lazy a)
-  Formula :: FormulaX ctx a -> LensM (AssocCtxMonad ctx) (E ctx a) -> E ctx (Lazy a)
-  Exp     :: ExpX ctx a -> E ctx a
-
-  Closure  :: ClosureX ctx a -> (E ctx a,Gamma (AssocCtxMonad ctx)) -> E ctx a
-  LambdaC  :: LambdaCX ctx a b -> (Gamma (AssocCtxMonad ctx), LensM (AssocCtxMonad ctx) (E ctx a), E ctx b) -> E ctx (a ~> b)
-  ValueC   :: ValueCX ctx a -> (E ctx (Value a), Gamma (AssocCtxMonad ctx)) -> E ctx (Value a)
-  Subtyped :: SubtypedX ctx a b -> E ctx a -> E ctx b
-
+  
 
 type family ValX      (ctx :: Type) :: Type
 type family ValueCX   (ctx :: Type) (a :: Types0):: Type

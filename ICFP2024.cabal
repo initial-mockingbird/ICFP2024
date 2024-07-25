@@ -49,6 +49,7 @@ library
       Zilly.Classic.Action
       Zilly.Classic.Expression
       Zilly.Classic.Interpreter
+      Zilly.Classic.Runner
       Zilly.Classic.TypeCheck
       Zilly.Contexts
       Zilly.RValue
@@ -105,7 +106,8 @@ test-suite ICFP2024-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Parser.Classic.QuickCheck
+      Classic.Parser.QuickCheck
+      Classic.TypeChecker.QuickCheck
       Paths_ICFP2024
   autogen-modules:
       Paths_ICFP2024

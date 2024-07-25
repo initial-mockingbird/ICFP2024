@@ -39,7 +39,8 @@ import Prelude.Singletons (SingI)
 import Debug.Trace (trace)
 import Control.Applicative (Alternative)
 import Data.Singletons (SingI(..))
-
+import Data.Traversable
+import Utilities.TypedMap (empty)
 
 data ActionTag
 type instance AssocActionTag ActionTag = ExprTag
@@ -87,6 +88,13 @@ instance  Execute ActionTag  where
     gamma <- ask 
     pure (Print rve, gamma)
 
+execProgram :: forall t.
+  ( Traversable t
+  )
+  => t (A ActionTag '()) -> (TaggedInterpreter ExprTag) (TypeRepMap ExprTag,t (A ActionTag '()))
+execProgram as = forAccumM empty as $ \env a ->
+  fmap (\(x,y) -> (y,x)) . local (const env) $ execInstruction @ActionTag a
+
 
 --------------------------
 -- Show instances
@@ -103,7 +111,8 @@ instance Monad m => ShowM m (A ActionTag a) where
     (:=.) x e -> (showsPrecM p . UT . varNameM ) x <=< showStringM " := " <=< showsM e
     Print e   -> showStringM "print " <=< showsPrecM 10 e
     OfExpr e  -> showsM e
-  
+
+
 {-
 execProgram :: forall t m a.
   ( Traversable t

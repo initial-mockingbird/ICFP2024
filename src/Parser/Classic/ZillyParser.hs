@@ -9,6 +9,13 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE RecordWildCards #-}
+
 
 {-|
 Module      : Parser.Classic.ZillyParser
@@ -28,8 +35,12 @@ module Parser.Classic.ZillyParser
   , A0 (..)
   , Types (..)
   , Types0 (..)
+  , Pretty (..)
+  , ParserShowContext(..)
+  , defaultPSC
   , parseAction
   , parseFile
+  , parseFile'
   , parseExpr
   , parserT2AdtT
   ) where
@@ -46,6 +57,7 @@ import Control.Monad
 
 import Data.Functor.Identity
 import Control.Applicative hiding (Alternative(..),optional)
+import Data.Coerce
 
 
 keywords :: [Symbol]
@@ -84,11 +96,8 @@ anyKeyword = choice $ map keyword keywords
 -- Useful functions
 -------------------------------
 
-
-flip2 :: (t1 -> t2 -> t3 -> t4) -> t3 -> t1 -> t2 -> t4
+flip2 :: (t1 -> t2 -> t3 -> t4) -> (t3 -> t1 -> t2 -> t4)
 flip2 f x3 x1 x2 = f x1 x2 x3
-
-
 
 -----------------------------------------
 -- Expression Grammar / Untyped AST
@@ -98,11 +107,13 @@ data Expr
   = Minus Expr Term SourcePos
   | Less Expr Term  SourcePos
   | OfTerm Term
+  deriving Show
 
 
 data Term
   = App Term Expr SourcePos
   | OfAtom Atom
+  deriving Show
 
 
 data Atom
@@ -113,18 +124,20 @@ data Atom
   | Formula Expr SourcePos
   | IfThenElse Expr Expr Expr SourcePos
   | Lambda Symbol Types Expr  SourcePos
+  deriving Show
 
 
 data Types
-  = Arrow Types0 Types SourcePos
+  = Arrow    Types0 Types SourcePos
   | OfTypes0 Types0
-
+  deriving Show
 
 data Types0
-  = Z           SourcePos
-  | Lazy Types  SourcePos
-  | LazyS Types SourcePos
+  = Z            SourcePos
+  | Lazy   Types SourcePos
+  | LazyS  Types SourcePos
   | TParen Types SourcePos
+  deriving Show
 
 
 instance Atom < Term where
@@ -133,9 +146,12 @@ instance Atom < Term where
 instance Term < Expr where
   upcast = OfTerm
 
+
 instance Types0 < Types where
   upcast = OfTypes0
 
+transUpcast :: forall b a c. (a < b, b < c) => a -> c
+transUpcast = upcast . upcast @a @b
 
 -----------------------------------------
 -- Type Parsers
@@ -171,6 +187,7 @@ pType = precedence $
 -- Expression Parsers
 -----------------------------------------
 
+
 ident :: Parser Symbol
 ident
   =  notFollowedBy anyKeyword *> mzero
@@ -188,7 +205,7 @@ mkIfThenElse p1 p2 p3 = getPosition <**>
   (IfThenElse <$> (keyword "if" *> p1 <* keyword "then") <*> p2 <* keyword "else" <*> p3)
 
 mkFormula :: Parser Expr -> Parser Atom
-mkFormula p = getPosition <**> (Formula <$> (keyword "formula" *> parens p))
+mkFormula p = getPosition <**> (Formula <$> (keyword "formula" *> (transUpcast @Term <$> mkParens p)))
 
 mkLambda :: Parser Symbol -> Parser Types -> Parser Expr -> Parser Atom
 mkLambda p1 p2 p3 = getPosition <**>
@@ -204,7 +221,14 @@ mkVar p = getPosition <**> (Var <$> p)
 mkDefer :: Parser Expr -> Parser Atom
 mkDefer p = getPosition <**> (Defer <$> quoted p)
 
+mkMinus :: Parser (Expr-> Term -> Expr)
+mkMinus = (\p x y -> Minus x y p) <$> getPosition
 
+mkLess :: Parser (Expr-> Term -> Expr)
+mkLess = (\p x y -> Less x y p) <$> getPosition
+
+mkApp :: Parser Expr -> Parser (Term -> Term)
+mkApp p = (\p' x y -> App y x p') <$> getPosition <*> (transUpcast @Term <$> mkParens p)
 
 atom :: Parser Atom
 atom
@@ -217,26 +241,9 @@ atom
   <|> mkDefer expr
 
 
-{- mkMinus :: Parser Expr -> Parser Term -> Parser Expr
-mkMinus p t = getPosition <**> 
-  (Minus <$> p <* lexeme (char '-') <*> t) -}
-
-
-mkMinus :: Parser (Expr-> Term -> Expr)
-mkMinus = (\p x y -> Minus x y p) <$> getPosition
-
-mkLess :: Parser (Expr-> Term -> Expr)
-mkLess = (\p x y -> Less x y p) <$> getPosition
-
-mkApp :: Parser Expr -> Parser (Term -> Term)
-mkApp p = (\p' x y -> App y x p') <$> getPosition <*> parens p
-
-
-
-
+-- | Expression parser
 expr :: Parser Expr
 expr = precedence $
-  
   sops InfixL [mkMinus <* "-" , mkLess <* "<"] |-<
   sops Postfix [mkApp expr] |-<
   Atom atom
@@ -262,7 +269,7 @@ instance A0 < A1 where
 
 
 mkPrint :: Parser Expr -> Parser A0
-mkPrint arg = getPosition <**> (Print <$> (keyword "print" *> parens arg))
+mkPrint arg = getPosition <**> (Print <$> (keyword "print" *> (transUpcast @Term <$> mkParens arg)))
 
 mkDecl :: Parser Types -> Parser Symbol -> Parser Expr -> Parser A0
 mkDecl pType' ident' expr' = getPosition <**> (Decl <$> pType' <*> ident' <* token (string ":=") <*> expr')
@@ -342,7 +349,68 @@ parseExpr = parse (fully expr) ""
 -- Show instances
 -----------------------------------------
 
-instance Show Expr where
+data Pretty a = P 
+  { getContext :: ParserShowContext 
+  , getData    :: a 
+  }
+data ParserShowContext = PSC 
+  { isTrailing :: Bool
+
+  }
+
+defaultPSC :: ParserShowContext
+defaultPSC = PSC{isTrailing=True}
+
+
+
+
+instance Show (Pretty Expr) where
+  showsPrec p = \case
+    -- minu
+    P psc@(PSC {..}) (Minus e1 e2 _) 
+      -> showParen b $ showsPrec 6 (P psc{isTrailing=False} e1) . showString " - " . showsPrec 7 (P psc{isTrailing=b} e2)
+      where b = p > 6
+    P psc@(PSC {..}) (Less e1 e2 _ ) 
+      -> showParen b $ showsPrec 5 (P psc{isTrailing=False} e1)  . showString " < " . showsPrec 5 (P psc{isTrailing=b} e2)
+      where b = p > 4
+    P psc (OfTerm t ) -> showsPrec p (P psc t)
+
+instance Show (Pretty Term) where
+  showsPrec p = \case
+    P psc@(PSC {..}) (App t (OfTerm (OfAtom e@(Parens {}))) _) 
+      -> showParen b $ showsPrec 10 (P psc{isTrailing=False} t) . showString " " . shows (P psc e)
+      where b = p > 10
+
+    P psc@(PSC {..}) (App t e _) 
+      -> showParen (p > 10) $ showsPrec 10 (P psc{isTrailing=False} t) . showString " " .  showParen True (shows (P psc e)) --showsPrec 11 e
+    P psc (OfAtom a ) -> showsPrec p (P psc a)
+
+instance Show (Pretty Atom) where
+  showsPrec p = \case
+    P _ (Val n _) -> shows n
+    P _ (Var s _) -> showString s
+    P psc (Parens e _) -> showParen True $ shows (P psc{isTrailing=True} e)
+    P psc (Defer e _) -> showChar '\'' . shows (P psc{isTrailing=True} e) . showChar '\''
+    P psc (Formula (OfTerm (OfAtom e@(Parens {}))) _) -> showString "formula " . shows (P psc{isTrailing=True} e)
+    P psc (Formula e _) -> showString "formula " . showParen True (shows (P psc{isTrailing=True} e))
+    P psc@(PSC {..}) (IfThenElse e1 e2 e3 _) 
+      -> showParen (not isTrailing) 
+      $ showString "if " 
+        . shows (P psc{isTrailing=True} e1) 
+        . showString " then " 
+        . shows (P psc{isTrailing=True} e2) 
+        . showString " else " 
+        . shows (P psc e3)
+    P psc@(PSC {..}) (Lambda s t e _) 
+      -> showParen isTrailing 
+      $  showString "/. "
+      . showString s 
+      . showString " : " 
+      . shows (P psc{isTrailing=True} t) 
+      . showString " => " 
+      . shows (P psc e)
+
+{- instance Show Expr where
   showsPrec p = \case
     -- minu
     Minus e1 e2 _ -> showParen (p > 6) $ showsPrec 6 e1 . showString " - " . showsPrec 7 e2
@@ -351,7 +419,8 @@ instance Show Expr where
 
 instance Show Term where
   showsPrec p = \case
-    App t e _ -> showParen (p > 10) $ showsPrec 10 t . showString " " . showParen True (shows e) --showsPrec 11 e
+    App t (OfTerm (OfAtom e@(Parens {}))) _ -> showParen (p > 10) $ showsPrec 10 t . showString " " . shows e 
+    App t e _ -> showParen (p > 10) $ showsPrec 10 t . showString " " .  showParen True (shows e) --showsPrec 11 e
     OfAtom a  -> showsPrec p a
 
 instance Show Atom where
@@ -360,11 +429,30 @@ instance Show Atom where
     Var s _ -> showString s
     Parens e _ -> showParen True $ shows e
     Defer e _ -> showChar '\'' . shows e . showChar '\''
+    Formula (OfTerm (OfAtom e@(Parens {}))) _ -> showString "formula " . shows e
     Formula e _ -> showString "formula " . showParen True (shows e)
     IfThenElse e1 e2 e3 _ -> showString "if " . shows e1 . showString " then " . shows e2 . showString " else " . shows e3
     Lambda s t e _ -> showParen (p > 1) $  showString "/. " . showString s . showString " : " . shows t . showString " => " . shows e
+ -}
 
-instance Show Types where
+instance Show (Pretty Types) where
+  showsPrec p = \case
+    P psc (Arrow t1 t2 _) 
+      -> showParen b 
+      $ showsPrec 2 (P psc{isTrailing=False} t1) 
+      . showString " -> " 
+      . showsPrec 1 (P psc{isTrailing=b} t2)
+      where b = p > 1
+    P psc (OfTypes0 t) -> showsPrec p (P psc t)
+
+instance Show (Pretty Types0) where
+  showsPrec _ = \case
+    P _ (Z _) -> showString "Z"
+    P psc (Lazy t _) -> showString "Lazy<" .  shows (P psc{isTrailing=True} t) . showString ">"
+    P psc (LazyS t _) -> showString "Lazy*<" . shows (P psc{isTrailing=True} t) . showString ">"
+    P psc (TParen e _) -> showParen True $ shows (P psc{isTrailing=True} e)
+
+{- instance Show Types where
   showsPrec p = \case
     Arrow t1 t2 _ -> showParen (p > 1) $ showsPrec 2 t1 . showString " -> " . showsPrec 1 t2
     OfTypes0 t -> showsPrec p t
@@ -374,13 +462,14 @@ instance Show Types0 where
     Z _ -> showString "Z"
     Lazy t _ -> showString "Lazy<" .  shows t . showString ">"
     LazyS t _ -> showString "Lazy*<" . shows t . showString ">"
-    TParen e _ -> showParen True $ shows e
+    TParen e _ -> showParen True $ shows e -}
 
 instance Show A0 where
   showsPrec _ = \case
-    Decl t s e _ -> shows t . showString " " . showString s . showString " := " . shows e
-    Assign s e _ -> showString s . showString " := " . shows e
-    Print e _ -> showString "print " . shows e
+    Decl t s e _ -> shows (P defaultPSC t) . showString " " . showString s . showString " := " . shows (P defaultPSC e)
+    Assign s e _ -> showString s . showString " := " . shows (P defaultPSC e)
+    Print (OfTerm (OfAtom e@(Parens {}))) _ -> showString "print " . shows (P defaultPSC e)
+    Print e _ -> showString "print " . showParen True (shows $ P defaultPSC e)
 
 instance Show A1 where
   show (OfA0 a) = show a <> ";\n"
@@ -433,3 +522,4 @@ instance Eq A0 where
   Assign s e _ == Assign s' e' _ = s == s' && e == e'
   Print e _ == Print e' _ = e == e'
   _ == _ = False
+
