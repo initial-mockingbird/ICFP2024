@@ -25,21 +25,12 @@ source-repository head
 
 library
   exposed-modules:
-      Action2
-      ADT2
       Control.Monad.Reader
       Inequality
       InequalityFamily
-      Interpreter2
-      Lensy2
-      Parser
       Parser.Classic.ZillyParser
       Parser.ParserZ
       Parser.Utilities
-      ParserM2
-      ParserZ
-      ShowM
-      TypedMap2
       Utilities.Codes
       Utilities.LensM
       Utilities.ShowM
@@ -51,7 +42,6 @@ library
       Zilly.Classic.Interpreter
       Zilly.Classic.Runner
       Zilly.Classic.TypeCheck
-      Zilly.Contexts
       Zilly.RValue
       Zilly.Types
       Zilly.Upcast
