@@ -80,7 +80,12 @@ data TypeCheckErrors
   | NonUnifiableTypes (P.Expr,Types,SourcePos) (P.Expr,Types,SourcePos)
 
 instance Show TypeCheckErrors where
-  show _ = "TODO: TypeCheckErrors show instance"
+  show (SymbolNotDefined s pos) = "Symbol " <> show s <> " not defined " <> show pos
+  show (NeedsLValue e pos) = "Needs lvalue " <> show e <> " " <> show pos 
+  show (TypeMismatch t1 t2 pos) = "Type mismatch " <> show pos
+  show (NonUnifiableTypes (e1,t1,pos1) (e2,t2,pos2)) 
+    = "Non unifiable types " <> show t1 <> "(" <> show pos1 <> ") " 
+      <> show t2 <> "(" <> show pos2 <> ") "
 
 newtype TCM a = TCM { unTCM :: ReaderT TypeCheckEnv (MaybeT (Writer ErrorLog) ) a }
   deriving newtype 
@@ -130,8 +135,10 @@ instance TypeCheck ActionTag P.Atom Types where
       Nothing -> 
         tell [SymbolNotDefined s varPos] >> empty
   typeCheck (P.Formula e pos) = do
-    _ <- typeCheck @ActionTag e
-    tell [NeedsLValue e pos] >> empty
+    (MkSome @_ @e' e',env) <- typeCheck @ActionTag e
+    case e' of
+      VarE v -> pure (MkSome $ FormulaE v,env)
+      _ -> tell [NeedsLValue e pos] >> empty
   typeCheck (P.IfThenElse e1 e2 e3 pos) = do
     env <- ask
     (MkSome @_ @x0 x0,_) <- typeCheck @ActionTag e1
@@ -220,7 +227,7 @@ instance TypeCheck ActionTag P.A0 () where
   type TCC ActionTag () = A ActionTag
   typeCheck (P.Decl t s e pos) = do
     env <- ask
-    let env' = M.insert s (P.parserT2AdtT t) env
+    let env' = M.insert s (rValueT $ P.parserT2AdtT t) env
     (MkSome @_ @e' e',_) <- local (const env') $ typeCheck @ActionTag e
     -- never fails
     (MkSome @_ @var (Var _ var),_) <- local (const env') $ typeCheck @ActionTag (P.Var s pos)
