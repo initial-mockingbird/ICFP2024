@@ -42,10 +42,12 @@ module Parser.Classic.ZillyParser
   , parseFile
   , parseFile'
   , parseExpr
+  , parsePacket
   , parserT2AdtT
   ) where
 
 import Parser.Utilities
+import Parser.ParserZ (deserializePacket,Packet',Payload'(..))
 import Zilly.Types qualified as ZT
 import Zilly.Types (Symbol )
 --import Zilly.ADT
@@ -305,7 +307,7 @@ skipLinesAndComments = void (skipLines <|> skipComments)
 
 
 eot :: ParsecT Symbol () Identity ()
-eot  = void (char '\EOT') <?> "end of packet"
+eot  = void (lookAhead $ char '\EOT') <?> "end of packet"
 
 actions :: ParsecT Symbol () Identity [A0]
 actions = manyTill (action <* skipLinesAndComments) (eot <|> eof)
@@ -345,6 +347,8 @@ parseFile' = fmap (parse actions' "") . readFile
 parseExpr :: Symbol -> Either ParseError Expr
 parseExpr = parse (fully expr) ""
 
+parsePacket :: Symbol -> Either ParseError (Packet' A1)
+parsePacket = parse (deserializePacket $ Payload <$> actions') "" 
 -----------------------------------------
 -- Show instances
 -----------------------------------------

@@ -61,6 +61,6 @@ instance Applicative f => ShowM f Int where
 instance Applicative f => ShowM f UnquotedText where
   showM (UT s) = pure s
 
-  
+{-   
 instance Show a => ShowM I a where
-  showM = I . show  
+  showM = I . show   -}

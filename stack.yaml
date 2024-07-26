@@ -17,9 +17,10 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2023-01-01.yaml
-resolver: #nightly-2024-06-22
-  url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/22/16.yaml
-
+resolver:  lts-22.6
+  #url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/22/16.yaml
+nix:
+  enable: true
 # User packages to be built.
 # Various formats can be used as shown in the example below.
 #
