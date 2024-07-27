@@ -66,6 +66,10 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    #- -no-hs-main
+    #- -optl-mexec-model=reactor
+    #- -optl-Wl,--export=cmain
+    #- -o Zilly.wasm
     dependencies:
     - ICFP2024
 
