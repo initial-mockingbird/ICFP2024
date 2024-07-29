@@ -7,12 +7,30 @@
   };
   outputs = inputs@{ self, nixpkgs, flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = nixpkgs.lib.systems.flakeExposed;
+      systems = nixpkgs.lib.systems.flakeExposed; 
       imports = [ inputs.haskell-flake.flakeModule];
 
       perSystem = { self', pkgs, config, ... }: 
-        let f = set: builtins.trace "\n${builtins.concatStringsSep "\n" (builtins.attrNames set)}" set; in 
-        {
+        let 
+          stack-wrapped = pkgs.symlinkJoin {
+            name = "stack"; # will be available as the usual `stack` in terminal
+            paths = [ pkgs.stack ];
+            buildInputs = [ pkgs.makeWrapper ];
+            postBuild = ''
+              wrapProgram $out/bin/stack \
+                --add-flags "\
+                  --no-nix \
+                  --system-ghc \
+                  --no-install-ghc \
+                "
+            '';
+          };
+          unlit-wrapped = pkgs.symlinkJoin {
+            name = "unlit"; # will be available as the usual `stack` in terminal
+            paths = [ pkgs.haskellPackages.unlit ];
+            buildInputs = [ pkgs.makeWrapper ];
+          };
+        in {
 
         # Typically, you just want a single project named "default". But
         # multiple projects are also possible, each using different GHC version.
@@ -21,7 +39,11 @@
           # By default, this is pkgs.haskellPackages.
           # You may also create your own. See https://community.flake.parts/haskell-flake/package-set
           #basePackages = pkgs.haskellPackages // inputs.ghc-wasm.packages;
-          packages = {};
+          basePackages = pkgs.haskell.packages.ghc964;
+          packages = {
+            #happy=pkgs.haskellPackages.happy;
+            #alex=pkgs.haskellPackages.alex;
+          };
           settings = {};
 
           # Extra package information. See https://community.flake.parts/haskell-flake/dependency
@@ -56,6 +78,7 @@
 
           devShell = {
             hlsCheck.enable = true;
+            hoogle = true;
 
            };
           autoWire = [ "packages" "apps" "checks" ];
@@ -72,7 +95,10 @@
           inputsFrom = [
             config.haskellProjects.default.outputs.devShell
           ];
-          nativeBuildInputs = with (inputs.ghc-wasm.packages.${pkgs.system}); [wasmtime wasm32-wasi-ghc-9_6  wasm32-wasi-cabal-9_6 ]; #(f inputs.ghc-wasm.packages.x86_64-linux); [wasm32-wasi-ghc-9_6];
+          nativeBuildInputs = 
+            [ inputs.ghc-wasm.packages.${pkgs.system}.all_9_6
+              stack-wrapped
+            ];
         };
       };
     };

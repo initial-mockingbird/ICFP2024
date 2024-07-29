@@ -34,6 +34,13 @@ dependencies:
 - HTF
 - lens
 
+flags:
+  wasm:
+    description: "target wasm architecture"
+    manual: true
+    default: false
+
+
 ghc-options:
 - -Wall
 - -Wcompat
@@ -62,10 +69,20 @@ executables:
   WASM:
     main:                Main.hs
     source-dirs:         wasm
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+    when:
+        condition: flag(wasm)
+        then:
+          ghc-options:
+            - -no-hs-main
+            - -optl-mexec-model=reactor
+            - -optl-Wl,--export=cmain
+            - -o Zilly.wasm
+        else:
+          ghc-options:
+            - -threaded
+            - -rtsopts
+            - -with-rtsopts=-N
+
     #- -no-hs-main
     #- -optl-mexec-model=reactor
     #- -optl-Wl,--export=cmain
