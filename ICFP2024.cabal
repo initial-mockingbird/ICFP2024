@@ -23,8 +23,8 @@ source-repository head
   type: git
   location: https://github.com/githubuser/ICFP2024
 
-flag wasm
-  description: target wasm architecture
+flag WASM
+  description: target WASM architecture
   manual: True
   default: False
 
@@ -57,20 +57,25 @@ library
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
-  build-depends:
-      HTF
-    , base >=4.7 && <5
-    , containers
-    , distributive
-    , lens
-    , mtl
-    , parsec
-    , singletons
-    , singletons-base
-    , singletons-th
-    , tagged
-    , transformers
   default-language: Haskell2010
+  if flag(WASM)
+    build-depends:
+        base >=4.7 && <5
+      , containers
+      , mtl
+      , parsec
+      , singletons
+      , transformers
+  else
+    build-depends:
+        base >=4.7 && <5
+      , containers
+      , mtl
+      , parsec
+      , singletons
+      , transformers
+  if flag(WASM)
+    cpp-options: -WASM
 
 executable ICFP2024-exe
   main-is: Main.hs
@@ -82,20 +87,26 @@ executable ICFP2024-exe
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      HTF
-    , ICFP2024
-    , base >=4.7 && <5
-    , containers
-    , distributive
-    , lens
-    , mtl
-    , parsec
-    , singletons
-    , singletons-base
-    , singletons-th
-    , tagged
-    , transformers
+      ICFP2024
   default-language: Haskell2010
+  if flag(WASM)
+    build-depends:
+        base >=4.7 && <5
+      , containers
+      , mtl
+      , parsec
+      , singletons
+      , transformers
+  else
+    build-depends:
+        base >=4.7 && <5
+      , containers
+      , mtl
+      , parsec
+      , singletons
+      , transformers
+  if flag(WASM)
+    cpp-options: -WASM
 
 executable WASM
   main-is: Main.hs
@@ -107,22 +118,27 @@ executable WASM
       wasm
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      HTF
-    , ICFP2024
-    , base >=4.7 && <5
-    , containers
-    , distributive
-    , lens
-    , mtl
-    , parsec
-    , singletons
-    , singletons-base
-    , singletons-th
-    , tagged
-    , transformers
+      ICFP2024
   default-language: Haskell2010
-  if flag(wasm)
-    ghc-options: -no-hs-main -optl-mexec-model=reactor -optl-Wl,--export=cmain -o Zilly.wasm
+  if flag(WASM)
+    build-depends:
+        base >=4.7 && <5
+      , containers
+      , mtl
+      , parsec
+      , singletons
+      , transformers
+  else
+    build-depends:
+        base >=4.7 && <5
+      , containers
+      , mtl
+      , parsec
+      , singletons
+      , transformers
+  if flag(WASM)
+    ghc-options: -no-hs-main -optl-mexec-model=reactor -optl-Wl,--export=cmain -o Zilly.WASM
+    cpp-options: -WASM
   else
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
 
@@ -141,15 +157,20 @@ test-suite ICFP2024-test
   build-depends:
       HTF
     , ICFP2024
-    , base >=4.7 && <5
-    , containers
-    , distributive
-    , lens
-    , mtl
-    , parsec
-    , singletons
-    , singletons-base
-    , singletons-th
-    , tagged
-    , transformers
   default-language: Haskell2010
+  if flag(WASM)
+    build-depends:
+        base >=4.7 && <5
+      , containers
+      , mtl
+      , parsec
+      , singletons
+      , transformers
+  else
+    build-depends:
+        base >=4.7 && <5
+      , containers
+      , mtl
+      , parsec
+      , singletons
+      , transformers

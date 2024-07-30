@@ -39,12 +39,19 @@
           # By default, this is pkgs.haskellPackages.
           # You may also create your own. See https://community.flake.parts/haskell-flake/package-set
           #basePackages = pkgs.haskellPackages // inputs.ghc-wasm.packages;
-          basePackages = pkgs.haskell.packages.ghc964;
+          basePackages = pkgs.haskell.packages.ghc982;
           packages = {
             #happy=pkgs.haskellPackages.happy;
             #alex=pkgs.haskellPackages.alex;
           };
-          settings = {};
+          settings = {
+             singletons-base = {
+              check = false;
+             };
+             singletons-base_3_3 = {
+              check = false;
+             };
+          };
 
           # Extra package information. See https://community.flake.parts/haskell-flake/dependency
           #
@@ -96,8 +103,10 @@
             config.haskellProjects.default.outputs.devShell
           ];
           nativeBuildInputs = 
-            [ inputs.ghc-wasm.packages.${pkgs.system}.all_9_6
+            [ inputs.ghc-wasm.packages.${pkgs.system}.all_9_10
               stack-wrapped
+              pkgs.hpack
+              pkgs.just
             ];
         };
       };

@@ -1,23 +1,27 @@
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE BangPatterns          #-}
-{-# LANGUAGE KindSignatures        #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE AllowAmbiguousTypes   #-}
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -ddump-splices        #-}
+{-# OPTIONS_GHC -ddump-to-file        #-}
+{-# LANGUAGE PatternSynonyms          #-}
+{-# LANGUAGE RankNTypes               #-}
+{-# LANGUAGE BangPatterns             #-}
+{-# LANGUAGE ScopedTypeVariables      #-}
+{-# LANGUAGE TypeApplications         #-}
+{-# LANGUAGE DataKinds                #-}
+{-# LANGUAGE TypeFamilies             #-}
+{-# LANGUAGE GADTs                    #-}
+{-# LANGUAGE FlexibleContexts         #-}
+{-# LANGUAGE AllowAmbiguousTypes      #-}
+{-# LANGUAGE QuantifiedConstraints    #-}
+{-# LANGUAGE ConstraintKinds          #-}
+{-# LANGUAGE FunctionalDependencies   #-}
+{-# LANGUAGE TypeOperators            #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE UndecidableInstances     #-}
+{-# LANGUAGE PolyKinds                #-}
+{-# LANGUAGE CPP                      #-}
+
+#ifndef WASM
+{-# LANGUAGE TemplateHaskell          #-}
+#endif
 
 {-|
 Module      : Zilly.RValue
@@ -35,24 +39,53 @@ module Zilly.RValue where
 
 import Zilly.Types
 import Zilly.ADT.Expression
-import Data.Singletons.TH  hiding (Const)
+
 import Prelude.Singletons hiding (Const)
 import Data.Singletons.Decide
 import Data.Kind (Type)
 
 
-
-{- type family RValueT (a :: Types) :: Types where
-  RValueT (Value a) = Value a
-  RValueT (Lazy a)  = a
-  RValueT (LazyS a) = a -}
-
+#ifndef WASM
+import Data.Singletons.TH  hiding (Const)
 $(singletons [d| 
   rValueT :: Types -> Types
   rValueT (Value a) = Value a
   rValueT (Lazy a)  = a
   rValueT (LazyS a) = a
   |])
+#else
+rValueT :: Types -> Types
+rValueT (Value a_aui4) = Value a_aui4
+rValueT (Lazy a_aui5) = a_aui5
+rValueT (LazyS a_aui6) = a_aui6
+type RValueTSym0 :: (Prelude.Singletons.~>) Types Types
+data RValueTSym0 :: (Prelude.Singletons.~>) Types Types
+  where
+    RValueTSym0KindInference :: SameKind (Apply RValueTSym0 arg_aui8) (RValueTSym1 arg_aui8) =>
+                                RValueTSym0 a6989586621679126237
+type instance Apply RValueTSym0 a6989586621679126237 = RValueT a6989586621679126237
+instance SuppressUnusedWarnings RValueTSym0 where
+  suppressUnusedWarnings = snd ((,) RValueTSym0KindInference ())
+type RValueTSym1 :: Types -> Types
+type family RValueTSym1 (a6989586621679126237 :: Types) :: Types where
+  RValueTSym1 a6989586621679126237 = RValueT a6989586621679126237
+type RValueT :: Types -> Types
+type family RValueT (a_aui7 :: Types) :: Types where
+  RValueT ('Value a_auia) = Apply ValueSym0 a_auia
+  RValueT ('Lazy a_auib) = a_auib
+  RValueT ('LazyS a_auic) = a_auic
+sRValueT ::
+  (forall (t_auid :: Types).
+    Sing t_auid -> Sing (Apply RValueTSym0 t_auid :: Types) :: Type)
+sRValueT (SValue (sA :: Sing a_auia))
+  = applySing (singFun1 @ValueSym0 SValue) sA
+sRValueT (SLazy (sA :: Sing a_auib)) = sA
+sRValueT (SLazyS (sA :: Sing a_auic)) = sA
+instance SingI (RValueTSym0 :: (Prelude.Singletons.~>) Types Types) where
+  sing = singFun1 @RValueTSym0 sRValueT
+#endif
+
+
 
 {- |
 Class that yields the rvalue of a given type. 

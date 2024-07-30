@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE PolyKinds                  #-}
@@ -18,7 +16,6 @@
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE ViewPatterns               #-}
 {-# LANGUAGE UndecidableInstances       #-}
-{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE StandaloneKindSignatures   #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE EmptyCase                  #-}

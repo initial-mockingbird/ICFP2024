@@ -1,5 +1,4 @@
 
-
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE PolyKinds                  #-}
@@ -18,7 +17,6 @@
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE ViewPatterns               #-}
 {-# LANGUAGE UndecidableInstances       #-}
-{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE StandaloneKindSignatures   #-}
 {-# LANGUAGE DefaultSignatures          #-}
 {-# LANGUAGE EmptyCase                  #-}
@@ -30,8 +28,9 @@
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE QuantifiedConstraints      #-}
-{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE ImportQualifiedPost        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 
 module Zilly.Classic.TypeCheck where
 
