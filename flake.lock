@@ -119,7 +119,79 @@
         "flake-parts": "flake-parts",
         "ghc-wasm": "ghc-wasm",
         "haskell-flake": "haskell-flake",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_2",
+        "singletons": "singletons",
+        "singletons-base": "singletons-base",
+        "singletons-base_3_3": "singletons-base_3_3",
+        "singletons-th": "singletons-th"
+      }
+    },
+    "singletons": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1722637713,
+        "narHash": "sha256-CRqW0XFiN2fSs3MEdKz0uqKKVpoK3emn7dymLBa7Wzc=",
+        "owner": "initial-mockingbird",
+        "repo": "singletons",
+        "rev": "545265e028d8c63b10be0f034a1c2641df831e2c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "initial-mockingbird",
+        "repo": "singletons",
+        "rev": "545265e028d8c63b10be0f034a1c2641df831e2c",
+        "type": "github"
+      }
+    },
+    "singletons-base": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1722637736,
+        "narHash": "sha256-dCE9azUHkhf5dH0MUGIbf/qK97c1OzEM/eh6H+0zoE4=",
+        "owner": "initial-mockingbird",
+        "repo": "singletons",
+        "rev": "d6c49e43e25c73540446a220148acf796be42409",
+        "type": "github"
+      },
+      "original": {
+        "owner": "initial-mockingbird",
+        "repo": "singletons",
+        "rev": "d6c49e43e25c73540446a220148acf796be42409",
+        "type": "github"
+      }
+    },
+    "singletons-base_3_3": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1722637736,
+        "narHash": "sha256-dCE9azUHkhf5dH0MUGIbf/qK97c1OzEM/eh6H+0zoE4=",
+        "owner": "initial-mockingbird",
+        "repo": "singletons",
+        "rev": "d6c49e43e25c73540446a220148acf796be42409",
+        "type": "github"
+      },
+      "original": {
+        "owner": "initial-mockingbird",
+        "repo": "singletons",
+        "rev": "d6c49e43e25c73540446a220148acf796be42409",
+        "type": "github"
+      }
+    },
+    "singletons-th": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1722637713,
+        "narHash": "sha256-CRqW0XFiN2fSs3MEdKz0uqKKVpoK3emn7dymLBa7Wzc=",
+        "owner": "initial-mockingbird",
+        "repo": "singletons",
+        "rev": "545265e028d8c63b10be0f034a1c2641df831e2c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "initial-mockingbird",
+        "repo": "singletons",
+        "rev": "545265e028d8c63b10be0f034a1c2641df831e2c",
+        "type": "github"
       }
     },
     "systems": {

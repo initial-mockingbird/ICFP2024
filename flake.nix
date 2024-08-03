@@ -3,7 +3,19 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     haskell-flake.url = "github:srid/haskell-flake";
-    ghc-wasm.url = "git+https://gitlab.haskell.org/ghc/ghc-wasm-meta"; #"https://gitlab.haskell.org/ghc/ghc-wasm-meta/-/archive/master/ghc-wasm-meta-master.tar.gz";
+    ghc-wasm.url = "git+https://gitlab.haskell.org/ghc/ghc-wasm-meta"; 
+    
+    singletons-base.url = "github:/initial-mockingbird/singletons/d6c49e43e25c73540446a220148acf796be42409";
+    singletons-base.flake = false;
+
+    singletons-base_3_3.url = "github:/initial-mockingbird/singletons/d6c49e43e25c73540446a220148acf796be42409";
+    singletons-base_3_3.flake = false;
+
+    singletons.url = "github:/initial-mockingbird/singletons/545265e028d8c63b10be0f034a1c2641df831e2c";
+    singletons.flake = false;
+
+    singletons-th.url = "github:/initial-mockingbird/singletons/545265e028d8c63b10be0f034a1c2641df831e2c";
+    singletons-th.flake = false;
   };
   outputs = inputs@{ self, nixpkgs, flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -25,24 +37,15 @@
                 "
             '';
           };
-          unlit-wrapped = pkgs.symlinkJoin {
-            name = "unlit"; # will be available as the usual `stack` in terminal
-            paths = [ pkgs.haskellPackages.unlit ];
-            buildInputs = [ pkgs.makeWrapper ];
-          };
         in {
 
-        # Typically, you just want a single project named "default". But
-        # multiple projects are also possible, each using different GHC version.
         haskellProjects.default = {
-          # The base package set representing a specific GHC version.
-          # By default, this is pkgs.haskellPackages.
-          # You may also create your own. See https://community.flake.parts/haskell-flake/package-set
-          #basePackages = pkgs.haskellPackages // inputs.ghc-wasm.packages;
           basePackages = pkgs.haskell.packages.ghc982;
           packages = {
-            #happy=pkgs.haskellPackages.happy;
-            #alex=pkgs.haskellPackages.alex;
+            singletons-base.source     = inputs.singletons-base;
+            singletons-base_3_3.source = inputs.singletons-base_3_3;
+            singletons.source          = inputs.singletons;
+            singletons-th.source       = inputs.singletons-th;
           };
           settings = {
              singletons-base = {
@@ -51,38 +54,15 @@
              singletons-base_3_3 = {
               check = false;
              };
+
+             singletons = {
+              check = false;
+             };
+
+             singletons-th = {
+              check = false;
+             };
           };
-
-          # Extra package information. See https://community.flake.parts/haskell-flake/dependency
-          #
-          # Note that local packages are automatically included in `packages`
-          # (defined by `defaults.packages` option).
-          #
-          # packages = {
-          #   aeson.source = "1.5.0.0"; # Hackage version override
-          #   shower.source = inputs.shower;
-          # };
-          # settings = {
-          #   aeson = {
-          #     check = false;
-          #   };
-          #   relude = {
-          #     haddock = false;
-          #     broken = false;
-          #   };
-          # };
-
-          # devShell = {
-          #  # Enabled by default
-          #  enable = true;
-          #
-          #  # Programs you want to make available in the shell.
-          #  # Default programs can be disabled by setting to 'null'
-          #  tools = hp: { fourmolu = hp.fourmolu; ghcid = null; };
-          #
-          #  hlsCheck.enable = true;
-          # };
-
           devShell = {
             hlsCheck.enable = true;
             hoogle = true;
@@ -91,19 +71,16 @@
           autoWire = [ "packages" "apps" "checks" ];
 
         };
-
-        # haskell-flake doesn't set the default package, but you can do it here.
         packages.default = self'.packages.ICFP2024;
 
         devShells.default = pkgs.mkShell {
           name = "haskell-template";
           meta.description = "Haskell development environment";
-          # See https://community.flake.parts/haskell-flake/devshell#composing-devshells
           inputsFrom = [
             config.haskellProjects.default.outputs.devShell
           ];
           nativeBuildInputs = 
-            [ inputs.ghc-wasm.packages.${pkgs.system}.all_9_10
+            [ inputs.ghc-wasm.packages.${pkgs.system}.all_9_8
               stack-wrapped
               pkgs.hpack
               pkgs.just
