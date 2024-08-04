@@ -1,5 +1,4 @@
-{-# OPTIONS_GHC -ddump-splices        #-}
-{-# OPTIONS_GHC -ddump-to-file        #-}
+
 {-# LANGUAGE RankNTypes               #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE GADTs                    #-}
@@ -8,7 +7,7 @@
 {-# LANGUAGE TypeFamilies             #-}
 {-# LANGUAGE CPP                      #-}
 
-#ifndef WASM
+#ifndef DWASM
 {-# LANGUAGE TemplateHaskell          #-}
 #endif
 
@@ -16,10 +15,9 @@
 module Utilities.Codes where
 import Zilly.Types qualified as ZT
 import Utilities.ShowM (ShowM)
-import Prelude.Singletons 
 
-#ifndef WASM
-import Data.Singletons.TH
+#ifdef DWASM
+--import Data.Singletons.TH
 $(singletons [d| 
 -- | Server response content format
   data ServerResponseCodes  
@@ -35,6 +33,11 @@ $(singletons [d|
     | ASY
   |])
 #else
+import qualified Data.Type.Coercion
+import Data.Singletons
+import Data.Singletons.TH
+import Data.Kind (Type)
+import qualified Data.Type.Equality
 data ServerResponseCodes = OK | ACK | ERROR
 data ServerNotificationCodes
   = SYM | SYP | SYU | ASY

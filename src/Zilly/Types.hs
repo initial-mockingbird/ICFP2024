@@ -1,5 +1,4 @@
-{-# OPTIONS_GHC -ddump-splices        #-}
-{-# OPTIONS_GHC -ddump-to-file        #-}
+
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE EmptyCase                #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
@@ -21,7 +20,7 @@
 {-# LANGUAGE CPP                      #-}
 -- {-# LANGUAGE ConstraintKinds #-}
 
-#ifndef WASM
+#ifndef DWASM
 {-# LANGUAGE TemplateHaskell          #-}
 #endif
 
@@ -42,15 +41,36 @@ and a way to inject them via continnuations.
 module Zilly.Types where
 
 
-import Prelude.Singletons hiding (Const)
+import Prelude.Singletons
+    ( withSingI,
+      SingI(..),
+      SingKind(fromSing),
+      (%&&),
+      (%<$>),
+      LiftA2Sym0,
+      PMonad(type (>>=)),
+      SApplicative(sLiftA2),
+      type (&&@#@$),
+      type (==@#@$),
+      PEq(type (==)),
+      SEq((%==)),
+      type (<$>@#@$),
+      FalseSym0,
+      JustSym0,
+      NothingSym0,
+      SBool(SFalse, STrue),
+      SMaybe(SJust, SNothing),
+      TrueSym0 )
 import Data.Singletons.Decide
 import Control.Applicative (Const(..))
+
+
 
 
 ---------------------------
 -- Singletons definitions
 ---------------------------
-#ifndef WASM
+#ifdef DWASM
 import Data.Singletons.TH  hiding (Const)
 $(singletons [d|
   infixr 0 :->
@@ -95,6 +115,11 @@ $(singletons [d|
 
   |])
 #else
+import qualified Data.Type.Coercion
+import Data.Singletons
+import Data.Singletons.TH
+import Data.Kind (Type)
+import qualified Data.Type.Equality
 infixr 0 :->
 data Types
   = Value Types0 |
@@ -159,8 +184,8 @@ baseType (LazyS (Lazy a_a9vp))
   = baseType a_a9vp
 baseType (LazyS (LazyS a_a9vq))
   = baseType a_a9vq
-type ValueSym0 :: (~>) Types0 Types
-data ValueSym0 :: (~>) Types0 Types
+type ValueSym0 :: (Data.Singletons.~>) Types0 Types
+data ValueSym0 :: (Data.Singletons.~>) Types0 Types
   where
     ValueSym0KindInference :: SameKind (Apply ValueSym0 arg_aa6X) (ValueSym1 arg_aa6X) =>
                               ValueSym0 a6989586621679048664
@@ -170,8 +195,8 @@ instance SuppressUnusedWarnings ValueSym0 where
 type ValueSym1 :: Types0 -> Types
 type family ValueSym1 (a6989586621679048664 :: Types0) :: Types where
   ValueSym1 a6989586621679048664 = Value a6989586621679048664
-type LazySym0 :: (~>) Types Types
-data LazySym0 :: (~>) Types Types
+type LazySym0 :: (Data.Singletons.TH.~>) Types Types
+data LazySym0 :: (Data.Singletons.TH.~>) Types Types
   where
     LazySym0KindInference :: SameKind (Apply LazySym0 arg_aa6Z) (LazySym1 arg_aa6Z) =>
                               LazySym0 a6989586621679048666
@@ -181,8 +206,8 @@ instance SuppressUnusedWarnings LazySym0 where
 type LazySym1 :: Types -> Types
 type family LazySym1 (a6989586621679048666 :: Types) :: Types where
   LazySym1 a6989586621679048666 = Lazy a6989586621679048666
-type LazySSym0 :: (~>) Types Types
-data LazySSym0 :: (~>) Types Types
+type LazySSym0 :: (Data.Singletons.TH.~>) Types Types
+data LazySSym0 :: (Data.Singletons.TH.~>) Types Types
   where
     LazySSym0KindInference :: SameKind (Apply LazySSym0 arg_aa71) (LazySSym1 arg_aa71) =>
                               LazySSym0 a6989586621679048668
@@ -195,8 +220,8 @@ type family LazySSym1 (a6989586621679048668 :: Types) :: Types where
 type ZSym0 :: Types0
 type family ZSym0 :: Types0 where
   ZSym0 = Z
-type (:->@#@$) :: (~>) Types ((~>) Types Types0)
-data (:->@#@$) :: (~>) Types ((~>) Types Types0)
+type (:->@#@$) :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types Types0)
+data (:->@#@$) :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types Types0)
   where
     (::->@#@$###) :: SameKind (Apply (:->@#@$) arg_aa74) ((:->@#@$$) arg_aa74) =>
                       (:->@#@$) a6989586621679048671
@@ -204,8 +229,8 @@ type instance Apply (:->@#@$) a6989586621679048671 = (:->@#@$$) a698958662167904
 instance SuppressUnusedWarnings (:->@#@$) where
   suppressUnusedWarnings = snd ((,) (::->@#@$###) ())
 infixr 0 :->@#@$
-type (:->@#@$$) :: Types -> (~>) Types Types0
-data (:->@#@$$) (a6989586621679048671 :: Types) :: (~>) Types Types0
+type (:->@#@$$) :: Types -> (Data.Singletons.TH.~>) Types Types0
+data (:->@#@$$) (a6989586621679048671 :: Types) :: (Data.Singletons.TH.~>) Types Types0
   where
     (::->@#@$$###) :: SameKind (Apply ((:->@#@$$) a6989586621679048671) arg_aa74) ((:->@#@$$$) a6989586621679048671 arg_aa74) =>
                       (:->@#@$$) a6989586621679048671 a6989586621679048672
@@ -217,8 +242,8 @@ type (:->@#@$$$) :: Types -> Types -> Types0
 type family (:->@#@$$$) (a6989586621679048671 :: Types) (a6989586621679048672 :: Types) :: Types0 where
   (:->@#@$$$) a6989586621679048671 a6989586621679048672 = (:->) a6989586621679048671 a6989586621679048672
 infixr 0 :->@#@$$$
-type BaseTypeSym0 :: (~>) Types Types
-data BaseTypeSym0 :: (~>) Types Types
+type BaseTypeSym0 :: (Data.Singletons.TH.~>) Types Types
+data BaseTypeSym0 :: (Data.Singletons.TH.~>) Types Types
   where
     BaseTypeSym0KindInference :: SameKind (Apply BaseTypeSym0 arg_aa78) (BaseTypeSym1 arg_aa78) =>
                                   BaseTypeSym0 a6989586621679048675
@@ -228,8 +253,8 @@ instance SuppressUnusedWarnings BaseTypeSym0 where
 type BaseTypeSym1 :: Types -> Types
 type family BaseTypeSym1 (a6989586621679048675 :: Types) :: Types where
   BaseTypeSym1 a6989586621679048675 = BaseType a6989586621679048675
-type UpperBoundSym0 :: (~>) Types ((~>) Types (Maybe Types))
-data UpperBoundSym0 :: (~>) Types ((~>) Types (Maybe Types))
+type UpperBoundSym0 :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types (Maybe Types))
+data UpperBoundSym0 :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types (Maybe Types))
   where
     UpperBoundSym0KindInference :: SameKind (Apply UpperBoundSym0 arg_aa7k) (UpperBoundSym1 arg_aa7k) =>
                                     UpperBoundSym0 a6989586621679048687
@@ -237,8 +262,8 @@ type instance Apply UpperBoundSym0 a6989586621679048687 = UpperBoundSym1 a698958
 instance SuppressUnusedWarnings UpperBoundSym0 where
   suppressUnusedWarnings = snd ((,) UpperBoundSym0KindInference ())
 type UpperBoundSym1 :: Types
-                        -> (~>) Types (Maybe Types)
-data UpperBoundSym1 (a6989586621679048687 :: Types) :: (~>) Types (Maybe Types)
+                        -> (Data.Singletons.TH.~>) Types (Maybe Types)
+data UpperBoundSym1 (a6989586621679048687 :: Types) :: (Data.Singletons.TH.~>) Types (Maybe Types)
   where
     UpperBoundSym1KindInference :: SameKind (Apply (UpperBoundSym1 a6989586621679048687) arg_aa7k) (UpperBoundSym2 a6989586621679048687 arg_aa7k) =>
                                     UpperBoundSym1 a6989586621679048687 a6989586621679048688
@@ -248,8 +273,8 @@ instance SuppressUnusedWarnings (UpperBoundSym1 a6989586621679048687) where
 type UpperBoundSym2 :: Types -> Types -> Maybe Types
 type family UpperBoundSym2 (a6989586621679048687 :: Types) (a6989586621679048688 :: Types) :: Maybe Types where
   UpperBoundSym2 a6989586621679048687 a6989586621679048688 = UpperBound a6989586621679048687 a6989586621679048688
-type LowerBoundSym0 :: (~>) Types ((~>) Types (Maybe Types))
-data LowerBoundSym0 :: (~>) Types ((~>) Types (Maybe Types))
+type LowerBoundSym0 :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types (Maybe Types))
+data LowerBoundSym0 :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types (Maybe Types))
   where
     LowerBoundSym0KindInference :: SameKind (Apply LowerBoundSym0 arg_aa7z) (LowerBoundSym1 arg_aa7z) =>
                                     LowerBoundSym0 a6989586621679048702
@@ -257,8 +282,8 @@ type instance Apply LowerBoundSym0 a6989586621679048702 = LowerBoundSym1 a698958
 instance SuppressUnusedWarnings LowerBoundSym0 where
   suppressUnusedWarnings = snd ((,) LowerBoundSym0KindInference ())
 type LowerBoundSym1 :: Types
-                        -> (~>) Types (Maybe Types)
-data LowerBoundSym1 (a6989586621679048702 :: Types) :: (~>) Types (Maybe Types)
+                        -> (Data.Singletons.TH.~>) Types (Maybe Types)
+data LowerBoundSym1 (a6989586621679048702 :: Types) :: (Data.Singletons.TH.~>) Types (Maybe Types)
   where
     LowerBoundSym1KindInference :: SameKind (Apply (LowerBoundSym1 a6989586621679048702) arg_aa7z) (LowerBoundSym2 a6989586621679048702 arg_aa7z) =>
                                     LowerBoundSym1 a6989586621679048702 a6989586621679048703
@@ -308,8 +333,8 @@ type family TFHelper_6989586621679050222 (a_aaw8 :: Types) (a_aaw9 :: Types) :: 
   TFHelper_6989586621679050222 (LazyS _) (Value _) = FalseSym0
   TFHelper_6989586621679050222 (LazyS _) (Lazy _) = FalseSym0
   TFHelper_6989586621679050222 (LazyS a_6989586621679048651_aawh) (LazyS b_6989586621679048653_aawi) = Apply (Apply (==@#@$) a_6989586621679048651_aawh) b_6989586621679048653_aawi
-type TFHelper_6989586621679050222Sym0 :: (~>) Types ((~>) Types Bool)
-data TFHelper_6989586621679050222Sym0 :: (~>) Types ((~>) Types Bool)
+type TFHelper_6989586621679050222Sym0 :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types Bool)
+data TFHelper_6989586621679050222Sym0 :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types Bool)
   where
     TFHelper_6989586621679050222Sym0KindInference :: SameKind (Apply TFHelper_6989586621679050222Sym0 arg_aawa) (TFHelper_6989586621679050222Sym1 arg_aawa) =>
                                                       TFHelper_6989586621679050222Sym0 a6989586621679050227
@@ -318,8 +343,8 @@ instance SuppressUnusedWarnings TFHelper_6989586621679050222Sym0 where
   suppressUnusedWarnings
     = snd ((,) TFHelper_6989586621679050222Sym0KindInference ())
 type TFHelper_6989586621679050222Sym1 :: Types
-                                          -> (~>) Types Bool
-data TFHelper_6989586621679050222Sym1 (a6989586621679050227 :: Types) :: (~>) Types Bool
+                                          -> (Data.Singletons.TH.~>) Types Bool
+data TFHelper_6989586621679050222Sym1 (a6989586621679050227 :: Types) :: (Data.Singletons.TH.~>) Types Bool
   where
     TFHelper_6989586621679050222Sym1KindInference :: SameKind (Apply (TFHelper_6989586621679050222Sym1 a6989586621679050227) arg_aawa) (TFHelper_6989586621679050222Sym2 a6989586621679050227 arg_aawa) =>
                                                       TFHelper_6989586621679050222Sym1 a6989586621679050227 a6989586621679050228
@@ -340,8 +365,8 @@ type family TFHelper_6989586621679050237 (a_aawn :: Types0) (a_aawo :: Types0) :
   TFHelper_6989586621679050237 Z ((:->) _ _) = FalseSym0
   TFHelper_6989586621679050237 ((:->) _ _) Z = FalseSym0
   TFHelper_6989586621679050237 ((:->) a_6989586621679048655_aaws a_6989586621679048657_aawt) ((:->) b_6989586621679048659_aawu b_6989586621679048661_aawv) = Apply (Apply (&&@#@$) (Apply (Apply (==@#@$) a_6989586621679048655_aaws) b_6989586621679048659_aawu)) (Apply (Apply (==@#@$) a_6989586621679048657_aawt) b_6989586621679048661_aawv)
-type TFHelper_6989586621679050237Sym0 :: (~>) Types0 ((~>) Types0 Bool)
-data TFHelper_6989586621679050237Sym0 :: (~>) Types0 ((~>) Types0 Bool)
+type TFHelper_6989586621679050237Sym0 :: (Data.Singletons.TH.~>) Types0 ((Data.Singletons.TH.~>) Types0 Bool)
+data TFHelper_6989586621679050237Sym0 :: (Data.Singletons.TH.~>) Types0 ((Data.Singletons.TH.~>) Types0 Bool)
   where
     TFHelper_6989586621679050237Sym0KindInference :: SameKind (Apply TFHelper_6989586621679050237Sym0 arg_aawp) (TFHelper_6989586621679050237Sym1 arg_aawp) =>
                                                       TFHelper_6989586621679050237Sym0 a6989586621679050242
@@ -350,8 +375,8 @@ instance SuppressUnusedWarnings TFHelper_6989586621679050237Sym0 where
   suppressUnusedWarnings
     = snd ((,) TFHelper_6989586621679050237Sym0KindInference ())
 type TFHelper_6989586621679050237Sym1 :: Types0
-                                          -> (~>) Types0 Bool
-data TFHelper_6989586621679050237Sym1 (a6989586621679050242 :: Types0) :: (~>) Types0 Bool
+                                          -> (Data.Singletons.TH.~>) Types0 Bool
+data TFHelper_6989586621679050237Sym1 (a6989586621679050242 :: Types0) :: (Data.Singletons.TH.~>) Types0 Bool
   where
     TFHelper_6989586621679050237Sym1KindInference :: SameKind (Apply (TFHelper_6989586621679050237Sym1 a6989586621679050242) arg_aawp) (TFHelper_6989586621679050237Sym2 a6989586621679050242 arg_aawp) =>
                                                       TFHelper_6989586621679050237Sym1 a6989586621679050242 a6989586621679050243
@@ -479,31 +504,31 @@ sLowerBound (SValue SZ) (SValue SZ)
       (applySing (singFun1 @ValueSym0 SValue) SZ)
 sLowerBound (SValue SZ) (SValue ((:%->) _ _)) = SNothing
 sLowerBound (SValue ((:%->) _ _)) (SValue SZ) = SNothing
-instance SingI (BaseTypeSym0 :: (~>) Types Types) where
+instance SingI (BaseTypeSym0 :: (Data.Singletons.TH.~>) Types Types) where
   sing = singFun1 @BaseTypeSym0 sBaseType
-instance SingI (UpperBoundSym0 :: (~>) Types ((~>) Types (Maybe Types))) where
+instance SingI (UpperBoundSym0 :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types (Maybe Types))) where
   sing = singFun2 @UpperBoundSym0 sUpperBound
 instance SingI d_aawA =>
-          SingI (UpperBoundSym1 (d_aawA :: Types) :: (~>) Types (Maybe Types)) where
+          SingI (UpperBoundSym1 (d_aawA :: Types) :: (Data.Singletons.TH.~>) Types (Maybe Types)) where
   sing
     = singFun1
         @(UpperBoundSym1 (d_aawA :: Types))
         (sUpperBound (sing @d_aawA))
 instance SingI1 (UpperBoundSym1 :: Types
-                                    -> (~>) Types (Maybe Types)) where
+                                    -> (Data.Singletons.TH.~>) Types (Maybe Types)) where
   liftSing (s_aawC :: Sing (d_aawA :: Types))
     = singFun1
         @(UpperBoundSym1 (d_aawA :: Types)) (sUpperBound s_aawC)
-instance SingI (LowerBoundSym0 :: (~>) Types ((~>) Types (Maybe Types))) where
+instance SingI (LowerBoundSym0 :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types (Maybe Types))) where
   sing = singFun2 @LowerBoundSym0 sLowerBound
 instance SingI d_aawF =>
-          SingI (LowerBoundSym1 (d_aawF :: Types) :: (~>) Types (Maybe Types)) where
+          SingI (LowerBoundSym1 (d_aawF :: Types) :: (Data.Singletons.TH.~>) Types (Maybe Types)) where
   sing
     = singFun1
         @(LowerBoundSym1 (d_aawF :: Types))
         (sLowerBound (sing @d_aawF))
 instance SingI1 (LowerBoundSym1 :: Types
-                                    -> (~>) Types (Maybe Types)) where
+                                    -> (Data.Singletons.TH.~>) Types (Maybe Types)) where
   liftSing (s_aawH :: Sing (d_aawF :: Types))
     = singFun1
         @(LowerBoundSym1 (d_aawF :: Types)) (sLowerBound s_aawH)
@@ -559,7 +584,7 @@ instance (SEq Types0, SEq Types) => SEq Types where
     forall (t1_abJr :: Types)
             (t2_abJs :: Types). Sing t1_abJr
                                     -> Sing t2_abJs
-                                        -> Sing (Apply (Apply ((==@#@$) :: TyFun Types ((~>) Types Bool)
+                                        -> Sing (Apply (Apply ((==@#@$) :: TyFun Types ((Data.Singletons.TH.~>) Types Bool)
                                                                           -> Type) t1_abJr) t2_abJs)
   (%==)
     (SValue (sA_6989586621679048643 :: Sing a_6989586621679048643_aawd))
@@ -590,7 +615,7 @@ instance SEq Types => SEq Types0 where
     forall (t1_abJr :: Types0)
             (t2_abJs :: Types0). Sing t1_abJr
                                       -> Sing t2_abJs
-                                        -> Sing (Apply (Apply ((==@#@$) :: TyFun Types0 ((~>) Types0 Bool)
+                                        -> Sing (Apply (Apply ((==@#@$) :: TyFun Types0 ((Data.Singletons.TH.~>) Types0 Bool)
                                                                             -> Type) t1_abJr) t2_abJs)
   (%==) SZ SZ = STrue
   (%==) SZ ((:%->) _ _) = SFalse
@@ -646,11 +671,11 @@ instance Eq (STypes (z_abN4 :: Types)) where
 instance (SDecide Types0, SDecide Types) =>
           Data.Type.Equality.TestEquality (STypes :: Types
                                                     -> Type) where
-  Data.Type.Equality.testEquality = decideEquality
+  testEquality = decideEquality
 instance (SDecide Types0, SDecide Types) =>
           Data.Type.Coercion.TestCoercion (STypes :: Types
                                                     -> Type) where
-  Data.Type.Coercion.testCoercion = decideCoercion
+  testCoercion = decideCoercion
 instance SDecide Types => SDecide Types0 where
   (%~) SZ SZ = Proved Refl
   (%~) SZ ((:%->) _ _) = Disproved (\ x_abNa -> case x_abNa of {})
@@ -669,31 +694,31 @@ instance Eq (STypes0 (z_abNi :: Types0)) where
 instance SDecide Types =>
           Data.Type.Equality.TestEquality (STypes0 :: Types0
                                                       -> Type) where
-  Data.Type.Equality.testEquality = decideEquality
+  testEquality = decideEquality
 instance SDecide Types =>
           Data.Type.Coercion.TestCoercion (STypes0 :: Types0
                                                       -> Type) where
-  Data.Type.Coercion.testCoercion = decideCoercion
+  testCoercion = decideCoercion
 instance SingI n_abIU =>
           SingI (Value (n_abIU :: Types0)) where
   sing = SValue sing
 instance SingI1 Value where
   liftSing = SValue
-instance SingI (ValueSym0 :: (~>) Types0 Types) where
+instance SingI (ValueSym0 :: (Data.Singletons.TH.~>) Types0 Types) where
   sing = singFun1 @ValueSym0 SValue
 instance SingI n_abIW =>
           SingI (Lazy (n_abIW :: Types)) where
   sing = SLazy sing
 instance SingI1 Lazy where
   liftSing = SLazy
-instance SingI (LazySym0 :: (~>) Types Types) where
+instance SingI (LazySym0 :: (Data.Singletons.TH.~>) Types Types) where
   sing = singFun1 @LazySym0 SLazy
 instance SingI n_abIY =>
           SingI (LazyS (n_abIY :: Types)) where
   sing = SLazyS sing
 instance SingI1 LazyS where
   liftSing = SLazyS
-instance SingI (LazySSym0 :: (~>) Types Types) where
+instance SingI (LazySSym0 :: (Data.Singletons.TH.~>) Types Types) where
   sing = singFun1 @LazySSym0 SLazyS
 instance SingI Z where
   sing = SZ
@@ -705,15 +730,15 @@ instance SingI n_abJb =>
   liftSing = (:%->) sing
 instance SingI2 (:->) where
   liftSing2 = (:%->)
-instance SingI ((:->@#@$) :: (~>) Types ((~>) Types Types0)) where
+instance SingI ((:->@#@$) :: (Data.Singletons.TH.~>) Types ((Data.Singletons.TH.~>) Types Types0)) where
   sing = singFun2 @(:->@#@$) (:%->)
 instance SingI d_abJd =>
-          SingI ((:->@#@$$) (d_abJd :: Types) :: (~>) Types Types0) where
+          SingI ((:->@#@$$) (d_abJd :: Types) :: (Data.Singletons.TH.~>) Types Types0) where
   sing
     = singFun1
         @((:->@#@$$) (d_abJd :: Types)) ((:%->) (sing @d_abJd))
 instance SingI1 ((:->@#@$$) :: Types
-                                -> (~>) Types Types0) where
+                                -> (Data.Singletons.TH.~>) Types Types0) where
   liftSing (s_abJf :: Sing (d_abJd :: Types))
     = singFun1 @((:->@#@$$) (d_abJd :: Types)) ((:%->) s_abJf)
 #endif

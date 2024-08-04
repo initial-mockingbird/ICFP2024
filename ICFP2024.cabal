@@ -30,12 +30,65 @@ flag WASM
 
 library
   exposed-modules:
+      Control.Applicative.Singletons
+      Control.Monad.Fail.Singletons
       Control.Monad.Reader
+      Control.Monad.Singletons
+      Control.Monad.Singletons.Internal
+      Control.Monad.Zip.Singletons
+      Data.Bool.Singletons
+      Data.Either.Singletons
+      Data.Eq.Singletons
+      Data.Foldable.Singletons
+      Data.Function.Singletons
+      Data.Functor.Compose.Singletons
+      Data.Functor.Const.Singletons
+      Data.Functor.Identity.Singletons
+      Data.Functor.Product.Singletons
+      Data.Functor.Singletons
+      Data.Functor.Sum.Singletons
+      Data.List.NonEmpty.Singletons
+      Data.List.Singletons
+      Data.List.Singletons.Internal
+      Data.List.Singletons.Internal.Disambiguation
+      Data.Maybe.Singletons
+      Data.Monoid.Singletons
+      Data.Ord.Singletons
+      Data.Ord.Singletons.Disambiguation
+      Data.Proxy.Singletons
+      Data.Semigroup.Singletons
+      Data.Semigroup.Singletons.Internal.Classes
+      Data.Semigroup.Singletons.Internal.Disambiguation
+      Data.Semigroup.Singletons.Internal.Wrappers
+      Data.Singletons
+      Data.Singletons.Base.CustomStar
+      Data.Singletons.Base.Enum
+      Data.Singletons.Base.Instances
+      Data.Singletons.Base.PolyError
+      Data.Singletons.Base.SomeSing
+      Data.Singletons.Base.TH
+      Data.Singletons.Base.TypeError
+      Data.Singletons.Base.TypeRepTYPE
+      Data.Singletons.Decide
+      Data.Singletons.ShowSing
+      Data.Singletons.Sigma
+      Data.Singletons.TH
+      Data.Singletons.TH.SuppressUnusedWarnings
+      Data.String.Singletons
+      Data.Traversable.Singletons
+      Data.Tuple.Singletons
+      Data.Void.Singletons
+      GHC.Base.Singletons
+      GHC.Num.Singletons
+      GHC.TypeLits.Singletons
+      GHC.TypeLits.Singletons.Internal
       Inequality
       InequalityFamily
       Parser.Classic.ZillyParser
       Parser.ParserZ
       Parser.Utilities
+      Prelude.Singletons
+      Text.Show.Singletons
       Utilities.Codes
       Utilities.LensM
       Utilities.ShowM
@@ -64,7 +117,8 @@ library
       , containers
       , mtl
       , parsec
-      , singletons
+      , pretty
+      , text >=1.2
       , transformers
   else
     build-depends:
@@ -72,10 +126,11 @@ library
       , containers
       , mtl
       , parsec
-      , singletons
+      , pretty
+      , text >=1.2
       , transformers
   if flag(WASM)
-    cpp-options: -WASM
+    cpp-options: -DWASM
 
 executable ICFP2024-exe
   main-is: Main.hs
@@ -95,7 +150,8 @@ executable ICFP2024-exe
       , containers
       , mtl
       , parsec
-      , singletons
+      , pretty
+      , text >=1.2
       , transformers
   else
     build-depends:
@@ -103,10 +159,11 @@ executable ICFP2024-exe
       , containers
       , mtl
       , parsec
-      , singletons
+      , pretty
+      , text >=1.2
       , transformers
   if flag(WASM)
-    cpp-options: -WASM
+    cpp-options: -DWASM
 
 executable WASM
   main-is: Main.hs
@@ -126,7 +183,8 @@ executable WASM
       , containers
       , mtl
       , parsec
-      , singletons
+      , pretty
+      , text >=1.2
       , transformers
   else
     build-depends:
@@ -134,11 +192,12 @@ executable WASM
       , containers
       , mtl
       , parsec
-      , singletons
+      , pretty
+      , text >=1.2
       , transformers
   if flag(WASM)
-    ghc-options: -no-hs-main -optl-mexec-model=reactor -optl-Wl,--export=cmain -o Zilly.WASM
-    cpp-options: -WASM
+    ghc-options: -no-hs-main -optl-mexec-model=reactor "-optl-Wl,--export=cmain" -o ./Zilly.WASM
+    cpp-options: -DWASM
   else
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
 
@@ -164,7 +223,8 @@ test-suite ICFP2024-test
       , containers
       , mtl
       , parsec
-      , singletons
+      , pretty
+      , text >=1.2
       , transformers
   else
     build-depends:
@@ -172,5 +232,6 @@ test-suite ICFP2024-test
       , containers
       , mtl
       , parsec
-      , singletons
+      , pretty
+      , text >=1.2
       , transformers

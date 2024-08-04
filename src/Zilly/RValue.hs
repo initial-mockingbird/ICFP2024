@@ -1,5 +1,4 @@
-{-# OPTIONS_GHC -ddump-splices        #-}
-{-# OPTIONS_GHC -ddump-to-file        #-}
+
 {-# LANGUAGE PatternSynonyms          #-}
 {-# LANGUAGE RankNTypes               #-}
 {-# LANGUAGE BangPatterns             #-}
@@ -19,7 +18,7 @@
 {-# LANGUAGE PolyKinds                #-}
 {-# LANGUAGE CPP                      #-}
 
-#ifndef WASM
+#ifndef DWASM
 {-# LANGUAGE TemplateHaskell          #-}
 #endif
 
@@ -40,12 +39,13 @@ module Zilly.RValue where
 import Zilly.Types
 import Zilly.ADT.Expression
 
-import Prelude.Singletons hiding (Const)
+
+import Data.Singletons
 import Data.Singletons.Decide
 import Data.Kind (Type)
 
 
-#ifndef WASM
+#ifdef DWASM
 import Data.Singletons.TH  hiding (Const)
 $(singletons [d| 
   rValueT :: Types -> Types
@@ -54,12 +54,17 @@ $(singletons [d|
   rValueT (LazyS a) = a
   |])
 #else
+import qualified Data.Type.Coercion
+import Data.Singletons
+import Data.Singletons.TH
+import Data.Kind (Type)
+import qualified Data.Type.Equality
 rValueT :: Types -> Types
 rValueT (Value a_aui4) = Value a_aui4
-rValueT (Lazy a_aui5) = a_aui5
+rValueT (Lazy a_aui5)  = a_aui5
 rValueT (LazyS a_aui6) = a_aui6
-type RValueTSym0 :: (Prelude.Singletons.~>) Types Types
-data RValueTSym0 :: (Prelude.Singletons.~>) Types Types
+type RValueTSym0 :: (Data.Singletons.~>) Types Types
+data RValueTSym0 :: (Data.Singletons.~>) Types Types
   where
     RValueTSym0KindInference :: SameKind (Apply RValueTSym0 arg_aui8) (RValueTSym1 arg_aui8) =>
                                 RValueTSym0 a6989586621679126237
@@ -81,7 +86,7 @@ sRValueT (SValue (sA :: Sing a_auia))
   = applySing (singFun1 @ValueSym0 SValue) sA
 sRValueT (SLazy (sA :: Sing a_auib)) = sA
 sRValueT (SLazyS (sA :: Sing a_auic)) = sA
-instance SingI (RValueTSym0 :: (Prelude.Singletons.~>) Types Types) where
+instance SingI (RValueTSym0 :: (Data.Singletons.~>) Types Types) where
   sing = singFun1 @RValueTSym0 sRValueT
 #endif
 

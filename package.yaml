@@ -27,19 +27,19 @@ when:
       - containers
       - mtl
       - transformers
-      - singletons
-      - singletons-base
       - parsec
-      
+      - pretty
+      - text >= 1.2
+
   else:
     dependencies:
     - base >= 4.7 && < 5
     - containers
     - mtl
     - transformers
-    - singletons
-    - singletons-base
     - parsec
+    - pretty
+    - text >= 1.2
     
     
 
@@ -62,10 +62,12 @@ ghc-options:
 - -Wredundant-constraints
 
 library:
-  source-dirs: src
+  source-dirs: 
+    - src
+
   when:
     condition: flag(WASM)
-    cpp-options: -WASM
+    cpp-options: -DWASM
 
 
 executables:
@@ -80,7 +82,7 @@ executables:
     - ICFP2024
     when:
       condition: flag(WASM)
-      cpp-options: -WASM
+      cpp-options: -DWASM
   
   WASM:
     main:                Main.hs
@@ -93,7 +95,7 @@ executables:
             - -optl-mexec-model=reactor
             - -optl-Wl,--export=cmain
             - -o Zilly.WASM
-          cpp-options: -WASM
+          cpp-options: -DWASM
         else:
           ghc-options:
             - -threaded

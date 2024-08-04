@@ -47,7 +47,7 @@ import Control.Monad.Reader
 import Data.Kind (Type)
 import Control.Monad.IO.Class
 import Control.Monad
-import Prelude.Singletons (SingI)
+import Data.Singletons (SingI)
 import Debug.Trace (trace)
 import Control.Applicative (Alternative)
 import Data.Singletons (SingI(..))

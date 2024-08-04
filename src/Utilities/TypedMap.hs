@@ -21,7 +21,7 @@ import qualified Data.Map as M
 
 import Unsafe.Coerce
 import Type.Reflection 
-import Control.Lens.Lens
+--import Control.Lens.Lens
 import Utilities.LensM
 import Utilities.ShowM
 import Zilly.ADT.Expression
@@ -34,7 +34,7 @@ import Control.Concurrent hiding (yield)
 import Control.Monad.IO.Class
 import Control.Monad
 import Control.Applicative hiding (yield)
-import Prelude.Singletons hiding (Map,Any,Symbol)
+import Data.Singletons
 import Data.String (IsString(..))
 import Data.Singletons.Decide 
 import Control.Monad.Reader
