@@ -40,7 +40,7 @@
         in {
 
         haskellProjects.default = {
-          basePackages = pkgs.haskell.packages.ghc982;
+          basePackages = pkgs.haskell.packages.ghc910;
           packages = {
             #singletons-base.source     = inputs.singletons-base;
             #singletons-base_3_3.source = inputs.singletons-base_3_3;
@@ -80,7 +80,7 @@
             config.haskellProjects.default.outputs.devShell
           ];
           nativeBuildInputs = 
-            [ inputs.ghc-wasm.packages.${pkgs.system}.all_9_8
+            [ inputs.ghc-wasm.packages.${pkgs.system}.all_9_10
               stack-wrapped
               pkgs.hpack
               pkgs.just

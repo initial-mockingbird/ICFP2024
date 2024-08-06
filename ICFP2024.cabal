@@ -115,10 +115,13 @@ library
     build-depends:
         base >=4.7 && <5
       , containers
+      , ghc-experimental
+      , jsaddle
+      , jsaddle-wasm
       , mtl
       , parsec
       , pretty
-      , text >=1.2
+      , text
       , transformers
   else
     build-depends:
@@ -148,10 +151,13 @@ executable ICFP2024-exe
     build-depends:
         base >=4.7 && <5
       , containers
+      , ghc-experimental
+      , jsaddle
+      , jsaddle-wasm
       , mtl
       , parsec
       , pretty
-      , text >=1.2
+      , text
       , transformers
   else
     build-depends:
@@ -181,10 +187,13 @@ executable WASM
     build-depends:
         base >=4.7 && <5
       , containers
+      , ghc-experimental
+      , jsaddle
+      , jsaddle-wasm
       , mtl
       , parsec
       , pretty
-      , text >=1.2
+      , text
       , transformers
   else
     build-depends:
@@ -196,7 +205,7 @@ executable WASM
       , text >=1.2
       , transformers
   if flag(WASM)
-    ghc-options: -no-hs-main -optl-mexec-model=reactor "-optl-Wl,--export=cmain" -o ./Zilly.WASM
+    ghc-options: -no-hs-main -optl-mexec-model=reactor -optl-Wl,--export=cmain -o Zilly.WASM
     cpp-options: -DWASM
   else
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -221,10 +230,13 @@ test-suite ICFP2024-test
     build-depends:
         base >=4.7 && <5
       , containers
+      , ghc-experimental
+      , jsaddle
+      , jsaddle-wasm
       , mtl
       , parsec
       , pretty
-      , text >=1.2
+      , text
       , transformers
   else
     build-depends:

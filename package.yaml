@@ -30,6 +30,10 @@ when:
       - parsec
       - pretty
       - text >= 1.2
+      - ghc-experimental
+      - jsaddle
+      - jsaddle-wasm
+      - text
 
   else:
     dependencies:
