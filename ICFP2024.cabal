@@ -85,6 +85,7 @@ library
       Inequality
       InequalityFamily
       Parser.Classic.ZillyParser
+      Parser.ClassicPlus.ZillyPlusParser
       Parser.ParserZ
       Parser.Utilities
       Prelude.Singletons
@@ -121,7 +122,10 @@ library
       , mtl
       , parsec
       , pretty
-      , text
+      , singletons
+      , singletons-base
+      , singletons-th
+      , text >=1.2
       , transformers
   else
     build-depends:
@@ -130,6 +134,8 @@ library
       , mtl
       , parsec
       , pretty
+      , singletons-base
+      , singletons-th
       , text >=1.2
       , transformers
   if flag(WASM)
@@ -157,7 +163,10 @@ executable ICFP2024-exe
       , mtl
       , parsec
       , pretty
-      , text
+      , singletons
+      , singletons-base
+      , singletons-th
+      , text >=1.2
       , transformers
   else
     build-depends:
@@ -166,6 +175,8 @@ executable ICFP2024-exe
       , mtl
       , parsec
       , pretty
+      , singletons-base
+      , singletons-th
       , text >=1.2
       , transformers
   if flag(WASM)
@@ -193,7 +204,10 @@ executable WASM
       , mtl
       , parsec
       , pretty
-      , text
+      , singletons
+      , singletons-base
+      , singletons-th
+      , text >=1.2
       , transformers
   else
     build-depends:
@@ -202,6 +216,8 @@ executable WASM
       , mtl
       , parsec
       , pretty
+      , singletons-base
+      , singletons-th
       , text >=1.2
       , transformers
   if flag(WASM)
@@ -236,7 +252,10 @@ test-suite ICFP2024-test
       , mtl
       , parsec
       , pretty
-      , text
+      , singletons
+      , singletons-base
+      , singletons-th
+      , text >=1.2
       , transformers
   else
     build-depends:
@@ -245,5 +264,7 @@ test-suite ICFP2024-test
       , mtl
       , parsec
       , pretty
+      , singletons-base
+      , singletons-th
       , text >=1.2
       , transformers

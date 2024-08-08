@@ -47,6 +47,16 @@ import Parser.ParserZ
 import Control.Monad.Reader
 import Text.Parsec
 import Data.Functor.Identity
+import Control.Concurrent
+import Control.Monad ((>=>))
+import Data.Functor (void)
+import Data.Map (Map)
+import Data.Map qualified as M
+data GammaEnv = GammaEnv
+  { typingEnv :: Map Symbol Types 
+  , valueStore :: TypeRepMap ExprTag
+  }
+
 data Err 
     = PErr ParseError 
     | TCErr ErrorLog
@@ -58,10 +68,10 @@ instance Show Err where
 parseAndTypecheck :: FilePath -> IO (Either Err [A ActionTag '()])
 parseAndTypecheck fp = P.parseFile' fp >>= \case
   Left e  -> pure $ Left (PErr e)
-  Right as -> case typeCheckProgram' as of
-    (Nothing,elog) -> pure $ Left (TCErr elog)
-    (Just as',[])  -> pure $ Right as'
-    (_,elog)       -> pure $ Left (TCErr elog)
+  Right as -> case typeCheckProgram' M.empty as of
+    (_,Nothing,elog) -> pure $ Left (TCErr elog)
+    (_,Just as',[])  -> pure $ Right as'
+    (_,_,elog)       -> pure $ Left (TCErr elog)
 
 parseAndTypecheck' :: FilePath -> IO ()
 parseAndTypecheck' fp = parseAndTypecheck fp >>= \case
@@ -71,7 +81,7 @@ parseAndTypecheck' fp = parseAndTypecheck fp >>= \case
 parseAndRun :: FilePath -> IO (Either Err [A ActionTag '()])
 parseAndRun fp = parseAndTypecheck fp >>= \case
   e@(Left _)  -> pure  e
-  Right as -> Right . snd <$> runReaderT (runTI  (execProgram as )) empty
+  Right as -> Right . snd <$> runReaderT (runTI  (execProgram empty as )) empty
 
 
 parseAndRun' :: FilePath -> IO ()
@@ -79,26 +89,46 @@ parseAndRun' fp = parseAndRun fp >>= \case
   Left e -> putStrLn $ show e
   Right as -> traverse showM as >>= putStrLn . unlines
 
-parseAndResponse :: Monad m => Symbol -> IO [Some (ServerResponse m)]
-parseAndResponse s =  case P.parsePacket s of
-  (Left e) -> pure [MkSome $ ERRORR $ show  (PErr e)]
-  (Right (Packet c s t (Payload p) eot)) -> case typeCheckProgram' p of
-    (_,elog@(_:_)) -> pure [MkSome $ ERRORR $ show (TCErr elog)]
-    (Nothing,elog) -> pure [MkSome $ ERRORR $ show (TCErr elog)]
-    (Just as,_)  -> do
-      (env',as') <- runReaderT (runTI  (execProgram as )) empty
-      pure $ MkSome . ACKR <$> as'
+parseAndResponse :: (Monad m) => GammaEnv-> Symbol -> IO ([Some (ServerResponse m)], GammaEnv)
+parseAndResponse env s =  case P.parsePacket s of
+  (Left e) -> pure ([MkSome $ ERRORR $ show  (PErr e)],env)
+  (Right (Packet c s t (Payload p) eot)) -> case typeCheckProgram' (typingEnv env) p of
+    (tEnv',_,elog@(_:_)) -> pure ([MkSome $ ERRORR $ show (TCErr elog)],env{ typingEnv = tEnv' })
+    (tEnv',Nothing,elog) -> pure ([MkSome $ ERRORR $ show (TCErr elog)],env{ typingEnv = tEnv'})
+    (tEnv',Just as,_)  -> do
+      (vs',as') <- runReaderT (runTI  (execProgram (valueStore env) as )) (valueStore env)
+      pure (MkSome . ACKR <$> as',GammaEnv{typingEnv=tEnv',valueStore=vs'})
 
-parseAndResponse' :: Symbol -> IO [Symbol]
-parseAndResponse' s = do
-  rs <- parseAndResponse @Identity s
+parseAndResponse' :: GammaEnv -> Symbol -> IO ([Symbol],GammaEnv)
+parseAndResponse' env s = do
+  (rs,env') <- parseAndResponse @Identity env s 
   let 
     f :: [Some (ServerResponse Identity)] -> [String]
     f = \case
         [] -> []
         (MkSome (ACKR a):s) -> runIdentity (showM a) : f s
         (MkSome (ERRORR e):s) -> e : f s
-  pure $ f rs 
-    
+  pure (f rs,env')
 
+buildInterpreter ::  IO (Symbol -> IO [Symbol])
+buildInterpreter = do
+  mv  <- newMVar $ GammaEnv{typingEnv=M.empty,valueStore=empty @ExprTag}
+  pure $ \s -> do
+    env <- readMVar mv
+    (results,newEnv) <- parseAndResponse' env s
+    void $ swapMVar mv newEnv
+    putStr "old env scopes: "
+    print $ M.keys $ typingEnv env
+    putStr "newEnv scopes: "
+    print $ M.keys $ typingEnv newEnv
+    pure results
 
+buildInterpreter' ::  IO (Symbol -> IO Symbol)
+buildInterpreter' = (fmap . fmap) unlines <$> buildInterpreter
+
+example :: IO ()
+example = do
+  f <- buildInterpreter'
+  f "5[5]\tZ x := 5;\EOT" >>= putStrLn
+  f "5[5]\tprint(2 - 2);\EOT" >>= putStrLn
+  f "5[5]\tprint(x);\EOT" >>= putStrLn

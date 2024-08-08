@@ -33,7 +33,9 @@ when:
       - ghc-experimental
       - jsaddle
       - jsaddle-wasm
-      - text
+      - singletons
+      - singletons-base
+      - singletons-th
 
   else:
     dependencies:
@@ -44,6 +46,9 @@ when:
     - parsec
     - pretty
     - text >= 1.2
+    - singletons
+    - singletons-base
+    - singletons-th
     
     
 

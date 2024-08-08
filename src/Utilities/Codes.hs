@@ -16,8 +16,9 @@ module Utilities.Codes where
 import Zilly.Types qualified as ZT
 import Utilities.ShowM (ShowM)
 
-#ifdef DWASM
---import Data.Singletons.TH
+#ifndef DWASM
+import Data.Singletons.TH
+
 $(singletons [d| 
 -- | Server response content format
   data ServerResponseCodes  

@@ -65,10 +65,12 @@ pSeq :: Parser Seq
 pSeq = Seq <$> number
 
 pTab :: Parser Tab
-pTab = Tab <$ char '\t'
+pTab = Tab <$ char '\t' <|> Tab <$ spaces <|> pure Tab
 
 pEOT :: Parser EOT
-pEOT = EOT <$ char '\EOT'
+pEOT = EOT <$ char '\EOT' <|> EOT <$ char '\ETB'
+
+
 
 deserializePacket :: Parser (Payload' a) -> Parser (Packet' a)
 deserializePacket pMsg 

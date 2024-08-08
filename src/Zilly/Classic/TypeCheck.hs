@@ -312,8 +312,8 @@ instance TypeCheck ActionTag P.A0 () where
       $ withRVType @ExprTag (sing @e')
       $ withRVType @ExprTag (sing @var)
       $ case upcastable @(RValueT  var)  @(RValueT  e') @ExprTag of
-        SameTypeUB  _     -> pure (MkSome (var := e'),TcGen env pos)
-        LeftUB      _     -> pure (MkSome (var := e'),TcGen env pos)
+        SameTypeUB  _     -> pure (MkSome (var :=. e'),TcGen env pos)
+        LeftUB      _     -> pure (MkSome (var :=. e'),TcGen env pos)
         RightUB     _     
           -> tell [RHSNotSubtype    (demote @e', tcGenPos er) $ demote @var] 
             >> pure  (MkSome $ OfExpr @_ @(Value Z) (ExpE bottom),TcGen env pos)
@@ -329,8 +329,8 @@ instance TypeCheck ActionTag P.A0 () where
     withRVType @ExprTag (sing @e')
       $ pure (MkSome $ Print e',TcGen env pos)
 
-typeCheckProgram :: P.A1 -> TCM [A ActionTag '()]
-typeCheckProgram as = fmap snd  . forAccumM M.empty (f as) $ \env a -> do
+typeCheckProgram :: Map Symbol Types -> P.A1 -> TCM (Map Symbol Types,[A ActionTag '()])
+typeCheckProgram ienv as = forAccumM ienv (f as) $ \env a -> do
   (MkSome @_ @a' a',r) <- local (const env) $  typeCheck @ActionTag a
   case decideEquality (sing @a') (sing @'()) of
     Just Refl -> pure (tcGenEnv r,a')
@@ -340,6 +340,7 @@ typeCheckProgram as = fmap snd  . forAccumM M.empty (f as) $ \env a -> do
     f (P.OfA0 a) = [a]
     f (P.Seq a as) = a : as
 
-typeCheckProgram' ::P.A1 ->  (Maybe [A ActionTag '()],ErrorLog)
-typeCheckProgram' as 
-  = runWriter . runMaybeT . runReaderT (unTCM $ typeCheckProgram as) $ M.empty
+typeCheckProgram' :: Map Symbol Types -> P.A1 ->  (Map Symbol Types, Maybe [A ActionTag '()],ErrorLog)
+typeCheckProgram' gamma as = case runWriter . runMaybeT . runReaderT (unTCM $ typeCheckProgram gamma as) $ gamma of
+  (Just (gamma',as'),elog) -> (gamma',Just as',elog)
+  (Nothing,elog)           -> (gamma,Nothing,elog)

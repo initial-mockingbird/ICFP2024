@@ -152,8 +152,7 @@ instance Term < Expr where
 instance Types0 < Types where
   upcast = OfTypes0
 
-transUpcast :: forall b a c. (a < b, b < c) => a -> c
-transUpcast = upcast . upcast @a @b
+
 
 -----------------------------------------
 -- Type Parsers
@@ -295,7 +294,6 @@ action =  a0 <* optional (lexeme (string ";"))
 
 -- | Skips 0 or more lines with spaces on them.
 skipLines :: ParsecT Symbol () Identity ()
---skipLines = void $ many (void endOfLine <|> space *> spaces)
 skipLines = void $ many (void endOfLine <|> space *> spaces)
 
 -- | Skips 0 or more comments with spaces on them.
@@ -349,6 +347,7 @@ parseExpr = parse (fully expr) ""
 
 parsePacket :: Symbol -> Either ParseError (Packet' A1)
 parsePacket = parse (deserializePacket $ Payload <$> actions') "" 
+
 -----------------------------------------
 -- Show instances
 -----------------------------------------

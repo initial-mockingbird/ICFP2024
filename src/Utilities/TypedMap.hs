@@ -49,6 +49,9 @@ newtype TypeRepMap ctx = TypeRepMap (Map Symbol (Any ctx))
 empty :: TypeRepMap ctx
 empty = TypeRepMap M.empty 
 
+inScope :: TypeRepMap ctx -> [Symbol]
+inScope (TypeRepMap m) = M.keys m 
+
 insert :: forall {m} a ctx.  (SingI a, AssocCtxMonad ctx ~ m, MonadIO m) => Symbol -> E ctx a -> TypeRepMap ctx -> m (TypeRepMap ctx)
 insert var val (TypeRepMap m) = case M.lookup var m of
   Just (MkAny @a' @_ mv ) -> case decideEquality (sing @a') (sing @a) of 

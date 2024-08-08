@@ -90,8 +90,8 @@ instance  Execute ActionTag  where
 execProgram :: forall t.
   ( Traversable t
   )
-  => t (A ActionTag '()) -> (TaggedInterpreter ExprTag) (TypeRepMap ExprTag,t (A ActionTag '()))
-execProgram as = forAccumM empty as $ \env a ->
+  => TypeRepMap ExprTag -> t (A ActionTag '()) -> (TaggedInterpreter ExprTag) (TypeRepMap ExprTag,t (A ActionTag '()))
+execProgram ienv as = forAccumM ienv as $ \env a ->
   fmap (\(x,y) -> (y,x)) . local (const env) $ execInstruction @ActionTag a
 
 

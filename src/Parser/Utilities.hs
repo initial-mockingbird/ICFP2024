@@ -6,6 +6,9 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 {-|
 Module      : Parser.Utilities
@@ -37,6 +40,8 @@ import Data.Functor.Const
 
 import Data.Functor
 import Data.Functor.Identity
+
+
 
 
 -------------------------------
@@ -111,6 +116,9 @@ infixr 5 |-<
 class sub < sup where
   upcast :: sub -> sup
   --downcast :: sup -> Maybe sub
+
+transUpcast :: forall b a c. (a < b, b < c) => a -> c
+transUpcast = upcast . upcast @a @b
 
 -----------------------------------------
 -- Precedence and Associativity

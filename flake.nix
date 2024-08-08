@@ -40,7 +40,7 @@
         in {
 
         haskellProjects.default = {
-          basePackages = pkgs.haskell.packages.ghc910;
+          basePackages = pkgs.haskell.packages.ghc982;
           packages = {
             #singletons-base.source     = inputs.singletons-base;
             #singletons-base_3_3.source = inputs.singletons-base_3_3;
@@ -48,20 +48,20 @@
             #singletons-th.source       = inputs.singletons-th;
           };
           settings = {
-             #singletons-base = {
-              #check = false;
-             #};
-             #singletons-base_3_3 = {
-              #check = false;
-             #};
+             singletons-base = {
+              check = false;
+             };
+             singletons-base_3_3 = {
+              check = false;
+             };
 
-             #singletons = {
-              #check = false;
-             #};
+             singletons = {
+              check = false;
+             };
 
-             #singletons-th = {
-              #check = false;
-             #};
+             singletons-th = {
+              check = false;
+             };
           };
           devShell = {
             hlsCheck.enable = true;
