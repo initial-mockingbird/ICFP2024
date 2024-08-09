@@ -57,6 +57,10 @@ flags:
     description: "target WASM architecture"
     manual: true
     default: false
+  WASM:
+    description: "target WASM architecture"
+    manual: true
+    default: false
 
 
 ghc-options:
@@ -103,7 +107,8 @@ executables:
             - -no-hs-main
             - -optl-mexec-model=reactor
             - -optl-Wl,--export=cmain
-            - -o Zilly.WASM
+            - -O2
+            
           cpp-options: -DWASM
         else:
           ghc-options:
