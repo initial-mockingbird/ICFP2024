@@ -10,18 +10,18 @@ if arch(wasm32)
     tag: be129c788f8ca1ea2e9cc1515397c1a46d02bb41
   source-repository-package
     type: git
-    location: https://github.com/initial-mockingbird/singletons/tree/master
-    tag: f037796c434ee19def49ac090519d2b6de3a3b85
+    location: https://github.com/initial-mockingbird/singletons
+    tag: a09ceebbd19498fc49c9bf4bbef4d4ff36da7331
     subdir: singletons
   source-repository-package
     type: git
-    location: https://github.com/initial-mockingbird/singletons/tree/master
-    tag: f037796c434ee19def49ac090519d2b6de3a3b85
+    location: https://github.com/initial-mockingbird/singletons
+    tag: a09ceebbd19498fc49c9bf4bbef4d4ff36da7331
     subdir: singletons-base
   source-repository-package
     type: git
-    location: https://github.com/initial-mockingbird/singletons/tree/master
-    tag: f037796c434ee19def49ac090519d2b6de3a3b85
+    location: https://github.com/initial-mockingbird/singletons
+    tag: a09ceebbd19498fc49c9bf4bbef4d4ff36da7331
     subdir: singletons-th
 
 package aeson

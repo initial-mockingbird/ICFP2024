@@ -18,7 +18,7 @@
 {-# LANGUAGE PolyKinds                #-}
 {-# LANGUAGE CPP                      #-}
 
-#ifndef DWASM
+#ifndef WASM
 {-# LANGUAGE TemplateHaskell          #-}
 #endif
 

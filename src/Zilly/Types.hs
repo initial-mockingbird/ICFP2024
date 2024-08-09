@@ -20,7 +20,7 @@
 {-# LANGUAGE CPP                      #-}
 -- {-# LANGUAGE ConstraintKinds #-}
 
-#ifndef DWASM
+#ifndef WASM
 {-# LANGUAGE TemplateHaskell          #-}
 #endif
 

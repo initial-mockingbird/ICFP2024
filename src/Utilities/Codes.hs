@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeFamilies             #-}
 {-# LANGUAGE CPP                      #-}
 
-#ifndef DWASM
+#ifndef WASM
 {-# LANGUAGE TemplateHaskell          #-}
 #endif
 
@@ -16,7 +16,7 @@ module Utilities.Codes where
 import Zilly.Types qualified as ZT
 import Utilities.ShowM (ShowM)
 
-#ifndef DWASM
+#ifndef WASM
 import Data.Singletons.TH
 
 $(singletons [d| 
