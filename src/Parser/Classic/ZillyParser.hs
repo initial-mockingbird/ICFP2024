@@ -188,12 +188,8 @@ pType = precedence $
 -- Expression Parsers
 -----------------------------------------
 
-
-ident :: Parser Symbol
-ident
-  =  notFollowedBy anyKeyword *> mzero
-  <|> lexeme (f <$> (char '_' <|> letter) <*> many (letter <|> digit <|> char '_'))
-  where f c cs = c:cs
+ident :: Parser String
+ident = mkIdent anyKeyword 
 
 mkVal :: Parser Int -> Parser Atom
 mkVal p = getPosition <**> (Val <$> p)

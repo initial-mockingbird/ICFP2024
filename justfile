@@ -15,8 +15,12 @@ _build_main:
 
 [group('build')]
 build wasm='1':
+  hpack
   @bash -c {{if wasm == '1' {"\"just _build_wasm\""} else {"\"just _build_main\""} }}
 
 clean:
   cabal clean
   rm -rf ./dist/**
+
+kill:
+  kill -9 .vscode-server 

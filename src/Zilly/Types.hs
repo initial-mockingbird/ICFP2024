@@ -70,7 +70,7 @@ import Control.Applicative (Const(..))
 ---------------------------
 -- Singletons definitions
 ---------------------------
-#ifdef DWASM
+#ifndef WASM
 import Data.Singletons.TH  hiding (Const)
 $(singletons [d|
   infixr 0 :->

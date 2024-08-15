@@ -2,17 +2,18 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
 module Main where
 
+#ifdef WASM
 import Zilly.Classic.Runner
 import GHC.Wasm.Prim
 import Language.Javascript.JSaddle.Wasm qualified as JSaddle.Wasm
 import Zilly.Classic.Runner (buildInterpreter')
 import GHC.IO
--- import GHC.Wasm.Prim 
 
 main :: IO ()
-main = example
+main = pure ()
 
 type InterpreterSig a = (a -> IO a)
 
@@ -25,6 +26,13 @@ cmain :: IO JSVal
 cmain = do
   f <- buildInterpreter' 
   wrapper $ \js -> toJSString <$> f (fromJSString js)
+#else
+
+main :: IO ()
+main = pure ()
+#endif
+
+
 
 
 

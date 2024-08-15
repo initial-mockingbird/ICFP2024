@@ -98,7 +98,7 @@ executables:
       cpp-options: -DWASM
   
   WASM:
-    main:                Main.hs
+    main:                WASM.hs
     source-dirs:         wasm
     when:
         condition: flag(WASM)

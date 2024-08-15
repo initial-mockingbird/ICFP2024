@@ -31,10 +31,13 @@ flag WASM
 library
   exposed-modules:
       Control.Monad.Reader
+      Data.Ord.Singletons
+      Data.Proof
       Inequality
       InequalityFamily
       Parser.Classic.ZillyParser
       Parser.ClassicPlus.ZillyPlusParser
+      Parser.Numbers
       Parser.ParserZ
       Parser.Utilities
       Utilities.Codes
@@ -132,7 +135,7 @@ executable ICFP2024-exe
     cpp-options: -DWASM
 
 executable WASM
-  main-is: Main.hs
+  main-is: WASM.hs
   other-modules:
       Paths_ICFP2024
   autogen-modules:

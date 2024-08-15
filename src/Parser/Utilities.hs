@@ -11,7 +11,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 {-|
-Module      : Parser.Utilities
+Module      : ParsecT String u m.Utilities
 Description : General parsing utilities for BNF grammars
 Copyright   : (c) Daniel Pinto, 2024
                   Enzo Alda, 2024
@@ -22,7 +22,7 @@ Portability : POSIX
 
 Based on 
 
-Design Patterns for Parser Combinators (Functional Pearl)
+Design Patterns for ParsecT String u m Combinators (Functional Pearl)
 
 ACM ISBN 978-1-4503-8615-9/21/08.
 https://doi.org/10.1145/3471874.3472984
@@ -48,44 +48,47 @@ import Data.Functor.Identity
 -- Main combinators
 -------------------------------
 
-lexeme :: Parser a -> Parser a
+lexeme :: Monad m => ParsecT String u m a -> ParsecT String u m a
 lexeme p = p <* spaces
 
-fully :: Parser a -> Parser a
+fully :: Monad m => ParsecT String u m a -> ParsecT String u m a
 fully p = spaces *> p <* eof
 
-token :: Parser a -> Parser a
+token :: Monad m => ParsecT String u m a -> ParsecT String u m a
 token = lexeme . try
 
-keyword :: String -> Parser ()
+keyword :: Monad m => String -> ParsecT String u m ()
 keyword k = token (string k *> notFollowedBy alphaNum)
 
-{- anyKeyword :: Parser ()
+{- anyKeyword :: ParsecT String u m ()
 anyKeyword = choice $ map keyword keywords -}
 
-infixl1 :: (a -> b) -> Parser a -> Parser (b -> a -> b) -> Parser b
+infixl1 :: (a -> b) -> ParsecT String u m a -> ParsecT String u m (b -> a -> b) -> ParsecT String u m b
 infixl1 wrap p op = (wrap <$> p) <**> rest
   where rest = flip (.) <$> (flip <$> op <*> p) <*> rest <|> pure id
 
-infixr1 :: (a -> b) -> Parser a -> Parser (a -> b -> b) -> Parser b
+infixr1 :: (a -> b) -> ParsecT String u m a -> ParsecT String u m (a -> b -> b) -> ParsecT String u m b
 infixr1 wrap p op =
   p <**> (flip <$> op <*> infixr1 wrap p op <|> pure wrap)
 
-postfix :: (a -> b) -> Parser a -> Parser (b -> b) -> Parser b
+postfix :: (a -> b) -> ParsecT String u m a -> ParsecT String u m (b -> b) -> ParsecT String u m b
 postfix wrap p op = (wrap <$> p) <**> rest
   where rest = flip (.) <$> op <*> rest <|> pure id
 
-prefix :: (a -> b) -> Parser (b -> b) -> Parser a -> Parser b
+prefix :: (a -> b) -> ParsecT String u m (b -> b) -> ParsecT String u m a -> ParsecT String u m b
 prefix wrap op p = op <*> prefix wrap op p <|> wrap <$> p
 
-parens :: Parser a -> Parser a
+parens :: Monad m => ParsecT String u m a -> ParsecT String u m a
 parens = lexeme . between (token $ char '(') (token $ char ')')
     
-quoted :: Parser a -> Parser a
+quoted :: Monad m => ParsecT String u m a -> ParsecT String u m a
 quoted = lexeme . between (token $ char '\'') (token $ char '\'')
 
-bracketed :: Parser a -> Parser a
+bracketed :: Monad m => ParsecT String u m a -> ParsecT String u m a
 bracketed = lexeme . between (char '<') (char '>')
+
+bracketed' :: Monad m => ParsecT String u m a -> ParsecT String u m a
+bracketed' = lexeme . between (char '[') (char ']')
 
 ---------------------------------------------
 -- Fixity, Associativity and Precedence
@@ -98,19 +101,19 @@ data Fixity a b sig where
   Prefix  :: Fixity a b (b -> b) 
   Postfix :: Fixity a b (b -> b)
 
-data Op a b where
-  Op :: Fixity a b sig -> (a -> b) -> Parser sig -> Op a b
+data Op u m a b where
+  Op :: Fixity a b sig -> (a -> b) -> ParsecT String u m sig -> Op u m a b
 
-data Prec a where
-  Level :: Prec a   -> Op a b -> Prec b
-  Atom  :: Parser a -> Prec a
+data Prec u m a where
+  Level :: Prec u m a   -> Op u m a b -> Prec u m b
+  Atom  :: ParsecT String u m a -> Prec u m a
 
 infixl 5 >-|
 infixr 5 |-<
-(>-|) :: Prec a -> Op a b -> Prec b
+(>-|) :: Prec u m a -> Op u m a b -> Prec u m b
 (>-|) = Level 
 
-(|-<) :: Op a b -> Prec a -> Prec b
+(|-<) :: Op u m a b -> Prec u m a -> Prec u m b
 (|-<) = flip (>-|)
 
 class sub < sup where
@@ -124,35 +127,44 @@ transUpcast = upcast . upcast @a @b
 -- Precedence and Associativity
 -----------------------------------------
 
-precedence :: Prec a -> Parser a
+precedence :: Prec u m a -> ParsecT String u m a
 precedence (Atom atom') = atom'
 precedence (Level lvls ops') = con (precedence lvls) ops'
   where 
-    con :: Parser a -> Op a b -> Parser b
+    con :: ParsecT String u m a -> Op u m a b -> ParsecT String u m b
     con p (Op InfixL wrap op)  = infixl1 wrap p op
     con p (Op InfixR wrap op)  = infixr1 wrap p op
     con p (Op InfixN wrap op)  = p <**> (flip <$> op <*> p <|> pure wrap)
     con p (Op Prefix wrap op)  = prefix wrap op p
     con p (Op Postfix wrap op) = postfix wrap p op
 
-precHomo :: Parser a -> [Op a a] -> Parser a
+precHomo :: ParsecT String u m a -> [Op u m a a] -> ParsecT String u m a
 precHomo atom' = precedence . foldl (>-|) (Atom atom')
 
 
-gops :: Fixity a b sig -> (a -> b) -> [Parser sig] -> Op a b
+gops :: Monad m => Fixity a b sig -> (a -> b) -> [ParsecT String u m sig] -> Op u m a b
 gops fixity wrap = Op fixity wrap . choice
 
-ops :: Fixity a a sig -> [Parser sig] -> Op a a
+ops :: Monad m => Fixity a a sig -> [ParsecT String u m sig] -> Op u m a a
 ops fixity = gops fixity id
 
-sops :: a < b => Fixity a b sig -> [Parser sig] -> Op a b
+sops :: (a < b, Monad m) => Fixity a b sig -> [ParsecT String u m sig] -> Op u m a b
 sops fixity = gops fixity upcast
 
 ----------------
--- Misc Parsers
+-- Misc ParsecT String u ms
 ----------------
 
-number :: Parser Int
+mkIdent :: Monad m => ParsecT String u m () -> ParsecT String u m String
+mkIdent anyKeyword
+  =  notFollowedBy anyKeyword *> mzero
+  <|> lexeme (f <$> (char '_' <|> letter) <*> many (letter <|> digit <|> char '_'))
+  where f c cs = c:cs
+
+
+
+
+number :: Monad m => ParsecT String u m Int
 number = f <$> option "" (token $ string "-" ) <*> lexeme (many1 digit)
   where f "-" ds = read ('-':ds)
         f _   ds = read ds

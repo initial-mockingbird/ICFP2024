@@ -45,7 +45,7 @@ import Data.Singletons.Decide
 import Data.Kind (Type)
 
 
-#ifdef DWASM
+#ifndef WASM
 import Data.Singletons.TH  hiding (Const)
 $(singletons [d| 
   rValueT :: Types -> Types
