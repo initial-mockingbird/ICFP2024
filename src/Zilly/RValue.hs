@@ -50,6 +50,7 @@ import Data.Singletons.TH  hiding (Const)
 $(singletons [d| 
   rValueT :: Types -> Types
   rValueT (Value a) = Value a
+  rValueT (Array a) = Array (rValueT a)
   rValueT (Lazy a)  = a
   rValueT (LazyS a) = a
   |])

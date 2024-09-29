@@ -18,6 +18,12 @@ build wasm='1':
   hpack
   @bash -c {{if wasm == '1' {"\"just _build_wasm\""} else {"\"just _build_main\""} }}
 
+[positional-arguments]
+ghci *args='':
+  hpack
+  cabal repl {{args}}
+  
+
 clean:
   cabal clean
   rm -rf ./dist/**

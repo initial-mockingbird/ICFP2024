@@ -277,7 +277,7 @@ data instance TPrec Atom where
   -- | Parentheses: @(type)@
   TParen     :: forall n. (n < Atom) ~ True
     => BookeepInfo -> TPrec n -> TPrec Atom
-
+  
 mkZT :: Parser (TPrec Inf)
 mkZT = mkBookeepInfo <**> (TZ <$ "Z")
 
@@ -639,11 +639,12 @@ atom
 -----------------------------------
 -- Precedence AppPrec Expressions
 -----------------------------------
-
+--
 data instance EPrec PrefixPrec where
   PUMinus :: BookeepInfo -> EPrec PrefixPrec -> EPrec PrefixPrec
   OfHigherPrefixPrec :: forall n. (SingI n,(n > PrefixPrec) ~ True) => EPrec n -> EPrec PrefixPrec
 -- | Precedence of applications
+--
 data instance EPrec PostfixPrec where
   -- Function applications: @expr(expr00,expr01,....)(expr10,expr11,...)...@
   PApp    :: BookeepInfo -> EPrec PostfixPrec -> [TupleArg EPrec PostfixPrec AppCtx] -> EPrec PostfixPrec
@@ -802,8 +803,8 @@ data A1
 
 
 data A0
-  = Decl Types String Expr BookeepInfo
-  | Assign String Expr     BookeepInfo
+  = Decl Types Expr Expr BookeepInfo
+  | Assign Expr Expr     BookeepInfo
   | Print Expr             BookeepInfo
 
 
@@ -814,17 +815,17 @@ instance A0 PU.< A1 where
 mkPrint :: Parser A0
 mkPrint = mkBookeepInfo <**> (Print <$> (keyword "print" *> parens expr))
 
-mkDecl :: Parser Types -> Parser String -> Parser Expr -> Parser A0
+mkDecl :: Parser Types -> Parser Expr -> Parser Expr -> Parser A0
 mkDecl pType' ident' expr' = mkBookeepInfo <**> (Decl <$> pType' <*> ident' <* token (string ":=") <*> expr')
 
-mkAssign :: Parser String -> Parser Expr -> Parser A0
+mkAssign :: Parser Expr -> Parser Expr -> Parser A0
 mkAssign ident' expr' = mkBookeepInfo <**> (Assign <$> ident' <* token (string ":=") <*> expr')
 
 a0 :: Parser A0
 a0
   =   mkPrint
-  <|> mkDecl pTypes ident expr
-  <|> mkAssign ident expr
+  <|> mkDecl pTypes expr expr
+  <|> mkAssign expr expr
 
 
 action :: Parser A0
@@ -887,10 +888,12 @@ tests =
   ]
 
 runTests :: IO ()
-runTests = forM_ (zip [1..] tests) $ \(i,s) -> do
+runTests = forM_ (zip [(1 :: Int)..] tests) $ \(i,s) -> do
   putStrLn $ show i <> ". " <> s
   putStrLn $ parseAction s
-  putStrLn ""
+  putStrLn "---------------------------"
+
+
 
 
 -----------------------------------------
@@ -900,4 +903,3 @@ runTests = forM_ (zip [1..] tests) $ \(i,s) -> do
 -----------------------------------------
 -- Eq instances
 -----------------------------------------
-

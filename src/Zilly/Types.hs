@@ -63,6 +63,7 @@ import Prelude.Singletons
       TrueSym0 )
 import Data.Singletons.Decide
 import Control.Applicative (Const(..))
+import Data.Kind (Type)
 
 
 
@@ -77,7 +78,8 @@ $(singletons [d|
   data Types 
       = Value Types0
       | Lazy Types 
-      | LazyS Types 
+      | LazyS Types
+      | Array Types
     deriving (Eq)
 
   data Types0 
@@ -86,6 +88,7 @@ $(singletons [d|
     deriving (Eq)
 
   lowerBound :: Types -> Types -> Maybe Types
+  lowerBound (Array a) (Array b) = Array <$> lowerBound a b
   lowerBound (Lazy a) (Lazy b) =  Lazy <$> lowerBound a b
   lowerBound (Value (a :-> b)) (Value (c :-> d)) =  Value <$> liftA2 (:->) (upperBound a c ) (lowerBound b d)
   lowerBound (Value a) (Lazy b)  = lowerBound (Value a) b
@@ -93,8 +96,17 @@ $(singletons [d|
   lowerBound (Value Z) (Value Z) = Just (Value Z)
   lowerBound (Value Z) (Value (_ :-> _)) = Nothing
   lowerBound (Value (_ :-> _)) (Value Z) = Nothing
+  lowerBound (Array _) (Value _)  = Nothing
+  lowerBound (Value _) (Array _)  = Nothing
+  lowerBound (Array _) (Lazy _)   = Nothing
+  lowerBound (Lazy _) (Array _)   = Nothing
+  lowerBound (Array _) (LazyS _)  = Nothing
+  lowerBound (LazyS _) (Array _)  = Nothing
+
+
 
   upperBound :: Types -> Types -> Maybe Types
+  upperBound (Array a) (Array b) = Array <$> upperBound a b
   upperBound (Value (a :-> b)) (Value (c :-> d))  =  Value <$> liftA2 (:->) (lowerBound a c) (upperBound b d)
   upperBound (Lazy a) (Lazy b)   =  Lazy <$> upperBound a b
   upperBound (Value a) (Lazy b)  =  Lazy <$> upperBound (Value a) b
@@ -102,8 +114,16 @@ $(singletons [d|
   upperBound (Value Z) (Value Z) = Just (Value Z)
   upperBound (Value Z) (Value (_ :-> _)) = Nothing
   upperBound (Value (_ :-> _)) (Value Z) = Nothing
+  upperBound (Array _) (Value _)  = Nothing
+  upperBound (Value _) (Array _)  = Nothing
+  upperBound (Array _) (Lazy _)   = Nothing
+  upperBound (Lazy _) (Array _)   = Nothing
+  upperBound (Array _) (LazyS _)  = Nothing
+  upperBound (LazyS _) (Array _)  = Nothing
+
 
   baseType :: Types -> Types
+  baseType (Array a)          = Array a
   baseType (Value Z)          = Value Z
   baseType (Value (a :-> b))  = Value (a :-> b)
   baseType (Lazy (Value a))   = Value a
@@ -748,11 +768,11 @@ instance Show Types where
     (Value a) -> showsPrec p a
     (Lazy a)  -> showString "Lazy <" . showsPrec p a . showString ">"
     (LazyS a) -> showString "Lazy* <" . showsPrec p a . showString ">"
-
+    (Array a) -> showString "array[" . showsPrec p a . showString "]"
 instance Show Types0 where
   showsPrec p = \case
     Z -> showString "Z"
-    (a :-> b) -> showParen (p > 0) $ showsPrec 1 a . showString " -> " . showsPrec 0 b
+    (a :-> b) -> showParen (p > 0) $ showsPrec 1 a . showString " -> " . shows b
 
 ---------------------------
 -- Type synonyms
@@ -763,6 +783,8 @@ type Symbol = String
 infixr 0 ~>
 type (~>) a b = Value (a :-> b)
 
+class SingI a => BasicType a where
+  type HashType a :: Type
 
 
 --------------------------

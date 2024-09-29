@@ -45,7 +45,11 @@ library
       Utilities.ShowM
       Utilities.TypedMap
       Zilly.ADT.Action
+      Zilly.ADT.Arithmetic
+      Zilly.ADT.Array
+      Zilly.ADT.Comparison
       Zilly.ADT.Expression
+      Zilly.ADT.ExpressionPlus
       Zilly.Classic.Action
       Zilly.Classic.Expression
       Zilly.Classic.Interpreter
