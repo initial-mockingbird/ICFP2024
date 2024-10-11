@@ -47,7 +47,8 @@ data  Comparison (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) where
   GTEQ :: GTEQX  f ctx a b c -> f ctx a -> f ctx b -> Comparison f ctx c
   EQ   :: EQX    f ctx a b c -> f ctx a -> f ctx b -> Comparison f ctx c
   NEQ  :: NEQX   f ctx a b c -> f ctx a -> f ctx b -> Comparison f ctx c
-  ComparisonExp :: ComparisonExpX f ctx a          -> Comparison f ctx a 
+  ComparisonExp :: ComparisonExpX f ctx a          -> Comparison f ctx a
+  ComparisonInh :: ComparisonInhX f ctx a -> f ctx a       -> Comparison f ctx a
 
 type family LTX   (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
 type family LTEQX (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
@@ -56,3 +57,4 @@ type family GTEQX (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: 
 type family EQX   (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
 type family NEQX  (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
 type family ComparisonExpX  (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) :: Type
+type family ComparisonInhX  (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) :: Type

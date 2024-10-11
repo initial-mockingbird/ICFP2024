@@ -44,10 +44,13 @@ library
       Utilities.LensM
       Utilities.ShowM
       Utilities.TypedMap
+      Utilities.TypedMapPlus
       Zilly.ADT.Action
+      Zilly.ADT.ActionPlus
       Zilly.ADT.Arithmetic
       Zilly.ADT.Array
       Zilly.ADT.Comparison
+      Zilly.ADT.Error
       Zilly.ADT.Expression
       Zilly.ADT.ExpressionPlus
       Zilly.Classic.Action
@@ -56,8 +59,18 @@ library
       Zilly.Classic.Runner
       Zilly.Classic.TypeCheck
       Zilly.RValue
+      Zilly.RValuePlus
       Zilly.Types
       Zilly.Upcast
+      Zilly.UpcastPlus
+      Zilly.ZillyPlus.Arithmetic
+      Zilly.ZillyPlus.Array
+      Zilly.ZillyPlus.Comparison
+      Zilly.ZillyPlus.Error
+      Zilly.ZillyPlus.Expression
+      Zilly.ZillyPlus.Interpreter
+      Zilly.ZillyPlus.Tower
+      Zilly.ZillyPlus.TypeCheck
   other-modules:
       Paths_ICFP2024
   autogen-modules:

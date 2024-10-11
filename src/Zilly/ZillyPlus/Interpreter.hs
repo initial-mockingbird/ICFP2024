@@ -13,14 +13,15 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 module Zilly.ZillyPlus.Interpreter where
 
 
-import Utilities.TypedMap
+import Utilities.TypedMapPlus
 import Utilities.LensM
-import Zilly.RValue
+import Zilly.RValuePlus
 import Zilly.Types
 
 import Control.Monad.Reader
@@ -40,7 +41,9 @@ newtype TaggedInterpreter ctx a = TI { runTI :: ReaderT (Gamma (AssocCtxMonad ct
     , MonadFail
     )
 
-instance (Gamma (AssocCtxMonad ctx) ~ TypeRepMap ctx) =>  MonadReader (TypeRepMap ctx) (TaggedInterpreter ctx) where
+instance 
+  ( Gamma (AssocCtxMonad ctx) ~ TypeRepMap sub ctx
+  ) =>  MonadReader (TypeRepMap sub ctx) (TaggedInterpreter ctx) where
   ask = TI ask
   local f = TI . local f . runTI
 

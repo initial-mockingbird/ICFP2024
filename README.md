@@ -1,4 +1,4 @@
-# ICFP2024
+#t ICFP2024
 
 On the `/semantics` you'll find the complete BNF Grammar, Typing Judgments and Operational semantics of Zilly.
 

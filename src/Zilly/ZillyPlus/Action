@@ -18,12 +18,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Zilly.Classic.Action where
+module Zilly.ZillyPlus.Action where
 
 import Utilities.LensM
-import Zilly.ADT.Expression
+import Zilly.ADT.ExpressionPlus
 import Zilly.ADT.Action
-import Zilly.Classic.Expression
+import Zilly.ZillyPlus.Expression
 import Zilly.Types
 import Zilly.RValue
 import Zilly.Upcast

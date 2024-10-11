@@ -30,25 +30,31 @@
 {-# LANGUAGE QuantifiedConstraints      #-}
 {-# LANGUAGE ImportQualifiedPost        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeAbstractions           #-}
+
+module Zilly.ZillyPlus.TypeCheck where
 
 
-module Zilly.Classic.TypeCheck where
-
-
-import Parser.Classic.ZillyParser qualified as P
+import Parser.ClassicPlus.ZillyPlusParser qualified as P
 import Utilities.LensM
-import Utilities.TypedMap hiding (empty)
+import Utilities.TypedMapPlus hiding (empty)
 import Utilities.ShowM
-import Zilly.ADT.Expression
-import Zilly.ADT.Action
-import Zilly.Classic.Action
-import Zilly.Classic.Expression
-import Zilly.Classic.Interpreter hiding (Env)
-import Zilly.RValue
+import Zilly.ADT.ExpressionPlus
+import Zilly.ADT.ActionPlus
+import Zilly.ZillyPlus.Expression
+import Zilly.ADT.Error 
+import Zilly.ZillyPlus.Error 
+import Zilly.ADT.Array 
+import Zilly.ZillyPlus.Array  
+import Zilly.ADT.Arithmetic 
+import Zilly.ZillyPlus.Arithmetic
+import Zilly.ZillyPlus.Tower
+import Zilly.ZillyPlus.Interpreter hiding (Env)
+import Zilly.RValuePlus
 import Zilly.Types
-import Zilly.Upcast
+import Zilly.UpcastPlus
 import Control.Monad.Reader
-
+import Data.Proof
 
 import Data.Kind (Type)
 import Data.Singletons
@@ -59,7 +65,7 @@ import qualified Data.Map as M
 import Control.Monad.Writer.CPS
 import Control.Monad.Error.Class
 import Control.Monad.Trans.Maybe
-import Parser.Classic.ZillyParser qualified as P
+import Parser.ClassicPlus.ZillyPlusParser qualified as P
 import Control.Monad (MonadPlus(mzero))
 import Text.Parsec (SourcePos)
 import Data.Singletons.Decide
@@ -89,7 +95,7 @@ data TypeCheckErrors
 
 instance Show TypeCheckErrors where
   show (SymbolNotDefined s pos) = "Symbol " <> show s <> " not defined " <> show pos
-  show (FormulaNeedsLValue e pos) = "Needs lvalue " <> show e <> " " <> show pos 
+  -- show (FormulaNeedsLValue e pos) = "Needs lvalue " <> show e <> " " <> show pos 
   show (TypeMismatch t1 t2 pos) = "Type mismatch " <> show pos
   show (NonUnifiableTypes (t1,pos1) (t2,pos2) ) 
     = "Non unifiable types:\n" 
@@ -135,212 +141,88 @@ data TcGen  = TcGen
 class TypeCheck actx e ret | e -> ret where
   type TCC actx ret :: ret -> Type
   type TCReturn actx e :: Type 
-  typeCheck :: forall {f} {ctx}.
-    ( AssocActionTag actx ~ ctx
-    , TCC actx ret ~ f
+  typeCheck :: forall {f} .
+    ( TCC actx ret ~ f
     ) => e -> TCM (Some f,TCReturn actx e)
 
-instance TypeCheck ActionTag P.Atom Types where
-  type TCC ActionTag  Types = E ExprTag
-  type TCReturn ActionTag P.Atom = TcGen
-  typeCheck (P.Val s pos) = do
-    env <- ask
-    pure (MkSome $  ValE s,TcGen env pos)
-  typeCheck (P.Var s pos) = do
+instance TypeCheck ActionTag (P.EPrec P.Atom) Types where 
+  type TCC ActionTag Types = ET 
+  type TCReturn ActionTag  (P.EPrec P.Atom) = TcGen
+
+  typeCheck (P.PInt p n) = ask >>= \env -> pure 
+    ( MkSome . ETower 
+      $ Val  
+        @ErrorT  
+        @ExprTag 
+        @(Value Z)
+        ( Dict
+        , n
+        , Dict
+        )
+    , TcGen env (P.tokenPos p) 
+    )
+
+  typeCheck (P.PDouble p n) = ask >>= \env -> pure 
+    ( MkSome . ETower 
+      $ Val  
+        @ErrorT  
+        @ExprTag 
+        @(Value F)
+        ( Dict
+        , n
+        , Dict
+        )
+    , TcGen env (P.tokenPos p)
+    )
+
+  typeCheck (P.PVar p s) =  do
     env <- ask
     case M.lookup s env of
       Just t -> case toSing  t of
         SomeSing @_ @t st -> withSingI st 
-          $ pure (MkSome $ VarE (mkVar @t @ExprTag s) ,TcGen env pos)
+          $ pure (MkSome . ETower $ VarE (mkVar @t @ExprTag s) ,TcGen env (P.tokenPos p))
       Nothing -> 
-        tell [SymbolNotDefined s pos] >> empty
-  typeCheck (P.Parens e _) = typeCheck @ActionTag e
-  typeCheck (P.Defer e pos) = do
-    (MkSome @_ @a a,tcGen) <- typeCheck @ActionTag e
-    withSingIRType @a
-      $ withRVType @ExprTag (sing @a)
-      $ pure (MkSome $ DeferE a,tcGen{tcGenPos=pos})
-  typeCheck (P.Formula e pos) = do
-    (MkSome @_ @e' e',env) <- typeCheck @ActionTag e
-    case e' of
-      VarE v -> pure (MkSome $ FormulaE v,env)
-      _ -> tell [FormulaNeedsLValue e pos] >> empty
-  typeCheck (P.IfThenElse e1 e2 e3 pos) = do
-    env <- ask
-    (MkSome @_ @x0 x0,e0r) <- typeCheck @ActionTag e1
-    (MkSome @_ @x1 x1,e1r) <- typeCheck @ActionTag e2
-    (MkSome @_ @x2 x2,e2r) <- typeCheck @ActionTag e3
-    withSingIRType @x0 
-      $ withSingIRType @x1
-      $ withSingIRType @x2
-      $ withRVType @ExprTag (sing @x0)
-      $ withRVType @ExprTag (sing @x1)
-      $ withRVType @ExprTag (sing @x2)
-      $ case decideEquality (sing @(RValueT x0)) (sing @(Value Z)) of
-        Nothing -> tell [TypeMismatch (ExpectedType $ Value Z)  (GotType $ demote @x0) $ tcGenPos e0r] >> empty
-        Just Refl -> case upcastable @(RValueT x1) @(RValueT x2) @ExprTag of
-          NonExistentUB     ->  tell 
-            [NonUnifiableTypes (demote @x1,tcGenPos e1r) (demote @x2,tcGenPos e2r) ] 
-            >> empty
-          SameTypeUB _      -> pure (MkSome $ IfE x0 x1 x2,TcGen env pos)
-          LeftUB _          -> pure (MkSome $ IfE x0 x1 x2,TcGen env pos)
-          RightUB _         -> pure (MkSome $ IfE x0 x1 x2,TcGen env pos)
-          SomethingElseUB _ -> pure (MkSome $ IfE x0 x1 x2,TcGen env pos)
-  typeCheck (P.Lambda s t e pos) = do
-    env <- ask
-    let env' = M.insert s (P.parserT2AdtT t) env
-    (MkSome @_ @body body,_) <- local (const env') $ typeCheck @ActionTag e
-    -- never fails
-    (MkSome @_ @var (Var _ var),_) <- local (const env') $ typeCheck @ActionTag (P.Var s pos)
-    withRVType @ExprTag (sing @body)
-      $ pure (MkSome $ LambdaE var body,TcGen env pos)
-
-
-instance TypeCheck ActionTag P.Term Types where
-  type TCC ActionTag Types = E ExprTag
-  type TCReturn ActionTag P.Term = TcGen
-  typeCheck (P.OfAtom a) = typeCheck @ActionTag a
-  typeCheck (P.App f x pos) = do
-    (MkSome @_ @f' f',fr) <- typeCheck @ActionTag f
-    (MkSome @_ @x' x',xr) <- typeCheck @ActionTag x
-    withRVType @ExprTag (sing @f')
-      $ withRVType @ExprTag (sing @x')
-      $ withSingIRType @f'
-      $ withSingIRType @x'
-      $ case sing @f' of
-        SValue ((sarg :: Sing arg) :%-> (sb :: Sing b)) 
-          -> withSingI sarg 
-          $ withSingI sb
-          $ case upcastable @(RValueT x') @arg  @ExprTag of
-            NonExistentUB     -> tell 
-              [ ArgNotSubtype (demote @(RValueT x'), tcGenPos xr) (demote @arg)] 
-              >> pure (MkSome @_ @b $ ExpE bottom, TcGen M.empty pos)
-            SomethingElseUB _ -> tell 
-              [ArgIsNotStrictSubtype (demote @(RValueT x'), tcGenPos xr) (demote @arg)] 
-              >> pure (MkSome @_ @b $ ExpE bottom, TcGen M.empty pos)
-            LeftUB _          -> tell 
-              [ArgNotSubtype (demote @(RValueT x'), tcGenPos xr) (demote @arg)] 
-              >> pure (MkSome @_ @b $ ExpE bottom, TcGen M.empty pos)
-            SameTypeUB _      -> pure (MkSome $ AppE f' x',TcGen M.empty pos)
-            RightUB _         -> pure (MkSome $ AppE f' x',TcGen M.empty pos)
-            
-        _ -> tell [AppNotAFun (demote @f') $ tcGenPos fr] >> empty
-      
-
-instance TypeCheck ActionTag P.Expr Types where
-  type TCC ActionTag  Types = E ExprTag
-  type TCReturn ActionTag P.Expr = TcGen
-  typeCheck (P.OfTerm t) = typeCheck @ActionTag t
-  typeCheck (P.Minus e t pos) = do
-    env <- ask
-    (MkSome @_ @e' e',er) <- typeCheck @ActionTag e
-    (MkSome @_ @t' t',tr) <- typeCheck @ActionTag t
-    withRVType @ExprTag (sing @e')
-      $ withRVType @ExprTag (sing @t')
-      $ withSingIRType @e'
-      $ withSingIRType @t'
-      $ case (decideEquality' @_ @(RValueT e') @(Value Z),decideEquality' @_ @(RValueT t') @(Value Z)) of
-        (Just Refl,Just Refl) -> pure (MkSome $ MinusE e' t',TcGen env pos)
-        (Nothing,Nothing) 
-            -> tell 
-              [ TypeMismatch (ExpectedType $ Value Z) (GotType $ demote @(RValueT e')) $ tcGenPos er
-              , TypeMismatch (ExpectedType $ Value Z) (GotType $ demote @(RValueT t')) $ tcGenPos tr
-              ] 
-            >> pure (MkSome @_ @(Value Z) $ ExpE bottom, TcGen M.empty pos)
-        (Just Refl,Nothing) 
-          -> tell [TypeMismatch (ExpectedType $ Value Z) (GotType $ demote @(RValueT t')) $ tcGenPos tr] 
-            >> pure (MkSome @_ @(Value Z) $ ExpE bottom, TcGen M.empty pos)
-        (Nothing,Just Refl) 
-          -> tell [TypeMismatch (ExpectedType $ Value Z) (GotType $ demote @(RValueT e')) $ tcGenPos er] 
-            >> pure (MkSome @_ @(Value Z) $ ExpE bottom, TcGen M.empty pos)
-  typeCheck (P.Less e t pos) = do
-    env <- ask
-    (MkSome @_ @e' e',er) <- typeCheck @ActionTag e
-    (MkSome @_ @t' t',tr) <- typeCheck @ActionTag t
-    withRVType @ExprTag (sing @e')
-      $ withRVType @ExprTag (sing @t')
-      $ withSingIRType @e'
-      $ withSingIRType @t'
-      $ case (decideEquality' @_ @(RValueT e') @(Value Z),decideEquality' @_ @(RValueT t') @(Value Z)) of
-        (Just Refl,Just Refl) -> pure (MkSome $ LessE e' t',TcGen env pos)
-        (Nothing,Nothing) 
-            -> tell 
-              [ TypeMismatch (ExpectedType $ Value Z) (GotType $ demote @(RValueT e')) $ tcGenPos er
-              , TypeMismatch (ExpectedType $ Value Z) (GotType $ demote @(RValueT t')) $ tcGenPos tr
-              ] 
-            >> pure (MkSome @_ @(Value Z) $ ExpE bottom, TcGen M.empty pos)
-        (Just Refl,Nothing) 
-          -> tell [TypeMismatch (ExpectedType $ Value Z) (GotType $ demote @(RValueT t')) $ tcGenPos tr] 
-            >> pure (MkSome @_ @(Value Z) $ ExpE bottom, TcGen M.empty pos)
-        (Nothing,Just Refl) 
-          -> tell [TypeMismatch (ExpectedType $ Value Z) (GotType $ demote @(RValueT e')) $ tcGenPos er] 
-            >> pure (MkSome @_ @(Value Z) $ ExpE bottom, TcGen M.empty pos)
-
-instance TypeCheck ActionTag P.A0 () where
-  type TCC ActionTag () = A ActionTag
-  type TCReturn ActionTag P.A0 = TcGen
-  typeCheck (P.Decl t s e pos) = do
-    env <- ask
-    let env' = M.insert s (rValueT $ P.parserT2AdtT t) env
-    (MkSome @_ @e' e',er) <- local (const env') $ typeCheck @ActionTag e
-    -- never fails
-    (MkSome @_ @var (Var _ var),_) <- local (const env') $ typeCheck @ActionTag (P.Var s pos)
-    withSingIRType @e'
-      $ withSingIRType @var
-      $ withRVType @ExprTag (sing @e')
-      $ withRVType @ExprTag (sing @var)
-      $ case upcastable @(RValueT  var)  @(RValueT  e') @ExprTag of
-        SameTypeUB  _     -> pure (MkSome (var := e'),TcGen env' pos)
-        LeftUB      _     -> pure (MkSome (var := e'),TcGen env' pos)
-        RightUB     _     
-          -> tell [RHSNotSubtype    (demote @e', tcGenPos er) $ demote @var] 
-            >> pure  (MkSome $ OfExpr @_ @(Value Z) (ExpE bottom),TcGen env' pos)
-        SomethingElseUB _ 
-          -> tell [RHSIsNotStrictSubtype    (demote @e', tcGenPos er) $ demote @var] 
-            >> pure  (MkSome $ OfExpr @_ @(Value Z) (ExpE bottom),TcGen env' pos)
-        NonExistentUB
-          -> tell [RHSNotSubtype    (demote @e', tcGenPos er) $ demote @var] 
-            >> pure  (MkSome $ OfExpr @_ @(Value Z) (ExpE bottom),TcGen env' pos)
-
-  typeCheck (P.Assign s e pos) = do
-    env <- ask
-    (MkSome @_ @e' e',er) <- typeCheck @ActionTag e
-    -- never fails
-    (MkSome @_ @var (Var _ var),_) <- typeCheck @ActionTag (P.Var s pos)
-    withSingIRType @e'
-      $ withSingIRType @var
-      $ withRVType @ExprTag (sing @e')
-      $ withRVType @ExprTag (sing @var)
-      $ case upcastable @(RValueT  var)  @(RValueT  e') @ExprTag of
-        SameTypeUB  _     -> pure (MkSome (var :=. e'),TcGen env pos)
-        LeftUB      _     -> pure (MkSome (var :=. e'),TcGen env pos)
-        RightUB     _     
-          -> tell [RHSNotSubtype    (demote @e', tcGenPos er) $ demote @var] 
-            >> pure  (MkSome $ OfExpr @_ @(Value Z) (ExpE bottom),TcGen env pos)
-        SomethingElseUB _ 
-          -> tell [RHSIsNotStrictSubtype    (demote @e', tcGenPos er) $ demote @var] 
-            >> pure  (MkSome $ OfExpr @_ @(Value Z) (ExpE bottom),TcGen env pos)
-        NonExistentUB
-          -> tell [RHSNotSubtype    (demote @e', tcGenPos er) $ demote @var] 
-            >> pure  (MkSome $ OfExpr @_ @(Value Z) (ExpE bottom),TcGen env pos)
-  typeCheck (P.Print e pos) = do
-    env <- ask
-    (MkSome @_ @e' e',_) <- typeCheck @ActionTag e
-    withRVType @ExprTag (sing @e')
-      $ pure (MkSome $ Print e',TcGen env pos)
-
-typeCheckProgram :: Map Symbol Types -> P.A1 -> TCM (Map Symbol Types,[A ActionTag '()])
-typeCheckProgram ienv as = forAccumM ienv (f as) $ \env a -> do
-  (MkSome @_ @a' a',r) <- local (const env) $  typeCheck @ActionTag a
-  case decideEquality (sing @a') (sing @'()) of
-    Just Refl -> pure (tcGenEnv r,a')
-    _ -> tell [undefined] >> empty
+        tell [SymbolNotDefined s (P.tokenPos p)] >> empty
   
-  where 
-    f (P.OfA0 a) = [a]
-    f (P.Seq a as) = a : as
+  typeCheck (P.PArray _ s) = undefined 
 
-typeCheckProgram' :: Map Symbol Types -> P.A1 ->  (Map Symbol Types, Maybe [A ActionTag '()],ErrorLog)
-typeCheckProgram' gamma as = case runWriter . runMaybeT . runReaderT (unTCM $ typeCheckProgram gamma as) $ gamma of
-  (Just (gamma',as'),elog) -> (gamma',Just as',elog)
-  (Nothing,elog)           -> (gamma,Nothing,elog)
+  typeCheck (P.PParen _ e) = typeCheck @ActionTag e
+
+  typeCheck (P.PDefer _ n) = undefined 
+
+  typeCheck (P.PLambda _ args t body) = undefined
+
+  typeCheck (P.PUniform _) = error "uniform not yet implemented"
+
+  typeCheck (P.PFormula _ e) = undefined 
+
+  typeCheck (P.PIf _ (cond,a,b)) = undefined
+
+  typeCheck (P.PBool _ n) = error "Bool not yet defined"
+
+instance TypeCheck ActionTag (P.EPrec P.PrefixPrec) Types where 
+  type TCC ActionTag Types = ET 
+  type TCReturn ActionTag  (P.EPrec P.PrefixPrec) = TcGen
+
+instance TypeCheck ActionTag (P.EPrec P.PostfixPrec) Types where 
+  type TCC ActionTag Types = ET 
+  type TCReturn ActionTag  (P.EPrec P.PostfixPrec) = TcGen
+
+instance TypeCheck ActionTag (P.EPrec 8) Types where 
+  type TCC ActionTag Types = ET 
+  type TCReturn ActionTag  (P.EPrec 8) = TcGen
+
+
+instance TypeCheck ActionTag (P.EPrec 7) Types where 
+  type TCC ActionTag Types = ET 
+  type TCReturn ActionTag  (P.EPrec 7) = TcGen
+
+
+instance TypeCheck ActionTag (P.EPrec 6) Types where 
+  type TCC ActionTag Types = ET 
+  type TCReturn ActionTag  (P.EPrec 6) = TcGen
+
+
+instance TypeCheck ActionTag (P.EPrec 4) Types where 
+  type TCC ActionTag Types = ET 
+  type TCReturn ActionTag  (P.EPrec 4) = TcGen

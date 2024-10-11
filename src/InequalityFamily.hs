@@ -1,22 +1,20 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
-
-
+{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE PolyKinds             #-}
 -- https://stackoverflow.com/questions/6939043/is-it-possible-to-place-inequality-constraints-on-haskell-type-variables
 module InequalityFamily  where
 
 
-data Yes = Yes deriving (Show)
-data No = No deriving (Show)
 
-type family TypeEq x y where
-  TypeEq x x  = Yes
-  TypeEq x y  = No
+type family TypeEq (x :: k) (y :: k) :: Bool where
+  TypeEq x x  = True 
+  TypeEq x y  = False 
 
 
-class (No ~ TypeEq x y) => (:/~) x y
-instance (No ~ TypeEq x y) => (:/~) x y
+class (False ~ TypeEq x y) => (:/~) (x :: k) (y :: k)
+instance (False ~ TypeEq x y) => (:/~) (x :: k) (y :: k)

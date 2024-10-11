@@ -8,9 +8,10 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE TypeOperators         #-}
 
 {-|
 Module      : Zilly.ADT.Expression
@@ -38,24 +39,35 @@ module Zilly.ADT.Arithmetic where
 
 import Zilly.Types
 import Data.Kind (Type)
-
+import Zilly.UpcastPlus
+import Data.Singletons (SingI)
 {-| Zilly expression Language. |-}
-data  Arithmetic (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) where
-  Plus     :: PlusX   f ctx a b c -> f ctx a -> f ctx b -> Arithmetic f ctx c
-  Minus    :: MinusX  f ctx a b c -> f ctx a -> f ctx b -> Arithmetic f ctx c
-  Times    :: TimesX  f ctx a b c -> f ctx a -> f ctx b -> Arithmetic f ctx c
-  Div      :: DivX    f ctx a b c -> f ctx a -> f ctx b -> Arithmetic f ctx c
-  Mod      :: ModX    f ctx a b c -> f ctx a -> f ctx b -> Arithmetic f ctx c
-  Power    :: PowerX  f ctx a b c -> f ctx a -> f ctx b -> Arithmetic f ctx c
-  UMinus   :: UMinusX f ctx a     -> f ctx a            -> Arithmetic f ctx a
-  ArithExp :: ArithExpX f ctx a                         -> Arithmetic f ctx a 
+data  Arithmetic   
+  (sup :: Types -> Type)  -- | Parent Type
+  (sub :: Types -> Type)  -- | Child Type
+  (ctx :: Type)           --    | Allows for multiple interpretations
+  (a :: Types)            -- | Expression type
+  where
+  Plus     :: PlusX   sup sub ctx a b c -> Arithmetic sup sub ctx a -> Arithmetic sup sub ctx b -> Arithmetic sup sub ctx c
+  Minus    :: MinusX  sup sub ctx a b c -> Arithmetic sup sub ctx a -> Arithmetic sup sub ctx b -> Arithmetic sup sub ctx c
+  Times    :: TimesX  sup sub ctx a b c -> Arithmetic sup sub ctx a -> Arithmetic sup sub ctx b -> Arithmetic sup sub ctx c
+  Div      :: DivX    sup sub ctx a b c -> Arithmetic sup sub ctx a -> Arithmetic sup sub ctx b -> Arithmetic sup sub ctx c
+  Mod      :: ModX    sup sub ctx a b c -> Arithmetic sup sub ctx a -> Arithmetic sup sub ctx b -> Arithmetic sup sub ctx c
+  Power    :: PowerX  sup sub ctx a b c -> Arithmetic sup sub ctx a -> Arithmetic sup sub ctx b -> Arithmetic sup sub ctx c
+  UMinus   :: UMinusX sup sub ctx a     -> Arithmetic sup sub ctx a -> Arithmetic sup sub ctx a
+  ArithExp :: ArithExpX sup sub ctx a   -> Arithmetic sup sub ctx a 
+  ArithInh :: ArithInhX sup sub ctx a   -> Arithmetic sup sub ctx a 
+  ArithUpcasted :: ArithUpcastedX sup sub ctx a b -> Arithmetic sup sub ctx a ->  Arithmetic sup sub ctx b 
 
-type family PlusX   (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
-type family MinusX  (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
-type family TimesX  (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
-type family DivX    (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
-type family ModX    (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
-type family PowerX  (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
-type family UMinusX (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) :: Type
-type family ArithExpX  (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) :: Type
+type family PlusX   (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
+type family MinusX  (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
+type family TimesX  (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
+type family DivX    (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
+type family ModX    (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
+type family PowerX  (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) (c :: Types) :: Type
+type family ArithUpcastedX  (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) (b :: Types) :: Type
+
+type family UMinusX (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) :: Type
+type family ArithExpX  (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) :: Type
+type family ArithInhX  (sup :: Types -> Type) (sub :: Types -> Type) (ctx :: Type) (a :: Types) :: Type
 

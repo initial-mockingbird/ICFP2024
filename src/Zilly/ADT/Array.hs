@@ -8,10 +8,10 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
-
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ImportQualifiedPost   #-}
 {-|
 Module      : Zilly.ADT.Expression
 Description : Main Expression Tree a la Trees that grow for Zilly
@@ -36,14 +36,33 @@ https://www.microsoft.com/en-us/research/wp-content/uploads/2016/11/trees-that-g
 -}
 module Zilly.ADT.Array where
 
-import Zilly.Types
+import Zilly.Types qualified as ZT
 import Data.Kind (Type)
 import Data.Sequence
 
 {-| Zilly expression Language. |-}
-data  Array (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) where
-  ArrayLiteral :: ArrayLiteralX f ctx a -> Seq (f ctx a) -> Array f ctx a
-  ArrayExp     :: ArrayExpX f ctx a -> Array f ctx a 
+data  ArrayE 
+  (sup :: ZT.Types -> Type)  -- | Parent Type
+  (sub :: ZT.Types -> Type)  -- | Child Type
+  (ctx :: Type)           --    | Allows for multiple interpretations
+  (a :: ZT.Types)            -- | Expression type
+  where
+  ArrayLiteral :: ArrayLiteralX sup sub ctx a 
+    -> Seq (ArrayE sup sub ctx a)
+    -> ArrayE sup sub ctx (ZT.Array a)
+  ArrayIndex   :: ArrayIndexX sup sub ctx a 
+    -> ArrayE sup sub ctx (ZT.Array a) 
+    -> ArrayE sup sub ctx (ZT.Value ZT.Z)
+    -> ArrayE sup sub ctx a 
+  ArrayExp     :: ArrayExpX sup sub ctx a  
+    -> ArrayE sup sub ctx a
+  ArrayInh     :: ArrayInhX sup sub ctx a
+    -> ArrayE sup sub ctx a
 
-type family ArrayLiteralX  (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) :: Type
-type family ArrayExpX      (f :: Type -> Types -> Type) (ctx :: Type) (a :: Types) :: Type
+type family ArrayLiteralX (sup :: ZT.Types -> Type) (sub :: ZT.Types -> Type) (ctx :: Type) (a :: ZT.Types) :: Type
+type family ArrayIndexX   (sup :: ZT.Types -> Type) (sub :: ZT.Types -> Type) (ctx :: Type) (a :: ZT.Types) :: Type
+type family ArrayExpX     (sup :: ZT.Types -> Type) (sub :: ZT.Types -> Type) (ctx :: Type) (a :: ZT.Types) :: Type
+type family ArrayInhX     (sup :: ZT.Types -> Type) (sub :: ZT.Types -> Type) (ctx :: Type) (a :: ZT.Types) :: Type
+
+
+

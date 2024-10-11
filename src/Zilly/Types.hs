@@ -18,6 +18,7 @@
 {-# LANGUAGE PatternSynonyms          #-}
 {-# LANGUAGE QuantifiedConstraints    #-}
 {-# LANGUAGE CPP                      #-}
+{-# LANGUAGE ConstraintKinds          #-}
 -- {-# LANGUAGE ConstraintKinds #-}
 
 #ifndef WASM
@@ -63,8 +64,8 @@ import Prelude.Singletons
       TrueSym0 )
 import Data.Singletons.Decide
 import Control.Applicative (Const(..))
-import Data.Kind (Type)
-
+import Data.Kind (Type,Constraint)
+import Data.Proof
 
 
 
@@ -84,6 +85,7 @@ $(singletons [d|
 
   data Types0 
     = Z
+    | F
     | (:->) Types Types
     deriving (Eq)
 
@@ -94,6 +96,9 @@ $(singletons [d|
   lowerBound (Value a) (Lazy b)  = lowerBound (Value a) b
   lowerBound (Lazy a)  (Value b) = lowerBound a (Value b)
   lowerBound (Value Z) (Value Z) = Just (Value Z)
+  lowerBound (Value Z) (Value F) = Just (Value Z)
+  lowerBound (Value F) (Value Z) = Just (Value Z)
+  lowerBound (Value F) (Value F) = Just (Value F)
   lowerBound (Value Z) (Value (_ :-> _)) = Nothing
   lowerBound (Value (_ :-> _)) (Value Z) = Nothing
   lowerBound (Array _) (Value _)  = Nothing
@@ -112,6 +117,9 @@ $(singletons [d|
   upperBound (Value a) (Lazy b)  =  Lazy <$> upperBound (Value a) b
   upperBound (Lazy a)  (Value b) =  Lazy <$> upperBound a (Value b)
   upperBound (Value Z) (Value Z) = Just (Value Z)
+  upperBound (Value Z) (Value F) = Just (Value F)
+  upperBound (Value F) (Value Z) = Just (Value F)
+  upperBound (Value F) (Value F) = Just (Value F)
   upperBound (Value Z) (Value (_ :-> _)) = Nothing
   upperBound (Value (_ :-> _)) (Value Z) = Nothing
   upperBound (Array _) (Value _)  = Nothing
@@ -953,6 +961,28 @@ ubIsTransitive' !f = withSingIUBType @a @c $ case decideEquality (sing @(UpperBo
   Just Refl -> f
   Nothing -> error "impossible case"
 
+ubIsInjective
+  :: forall {r0 :: Types} (f :: Types -> Types) (a :: Types) (b :: Types) cont. 
+  ( UpperBound (f a) (f b) ~ Just (f r0)
+  , SingI a 
+  , SingI b
+  , SingI r0
+  ) => (UpperBound a b ~ Just r0 => cont) -> cont
+ubIsInjective f =  withSingIUBType @a @b $ case decideEquality (sing @(UpperBound a b)) (sing @(Just r0)) of
+  Just Refl -> f 
+  Nothing   -> error "impossible case"
+
+
+ubIsInjective'
+  :: forall  (f :: Types -> Types) (a :: Types) (b :: Types) cont. 
+  ( UpperBound (f a) (f b) ~ Nothing 
+  , SingI a 
+  , SingI b
+  ) => (UpperBound a b ~ Nothing => cont) -> cont
+ubIsInjective' f =  withSingIUBType @a @b $ case decideEquality (sing @(UpperBound a b)) (sing @Nothing) of
+  Just Refl -> f 
+  Nothing   -> error "impossible case"
+
 
 
 
@@ -981,3 +1011,32 @@ btIsInductive :: forall {b} (a :: Types) cont.
   ) => (BaseType (Lazy a) ~ b => cont) -> cont
 btIsInductive f = undefined
 
+
+type family HasLazy (x :: Types) :: Bool where 
+  HasLazy (Value _) = False 
+  HasLazy (Array a) = HasLazy a
+  HasLazy (LazyS a) = HasLazy a
+  HasLazy (Lazy _)  = True
+
+
+
+
+
+type TypesCaseAnalysis (c :: Types -> Constraint) = 
+    ( C c Value
+    , C c Lazy 
+    , C c LazyS
+    , C c Array 
+    )
+
+typesCaseAnalysis :: forall 
+  (c :: Types -> Constraint)
+  (x :: Types).
+  ( TypesCaseAnalysis c
+  , SingI x 
+  ) => Dict (c x) 
+typesCaseAnalysis = case sing @x of 
+  SValue _ -> Dict 
+  SLazy  _ -> Dict 
+  SLazyS _ -> Dict 
+  SArray _ -> Dict

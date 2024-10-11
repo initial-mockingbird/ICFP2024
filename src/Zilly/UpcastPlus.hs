@@ -9,7 +9,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 {-|
 Module      : Zilly.Upcast
@@ -22,10 +22,11 @@ Stability   : experimental
 Portability : POSIX
 
 -}
-module Zilly.Upcast where
-  
-import Zilly.RValue
-import Zilly.ADT.Expression
+module Zilly.UpcastPlus where
+
+import Data.Proof
+import Zilly.RValuePlus
+import Zilly.ADT.ExpressionPlus
 import Zilly.Types
 import Utilities.LensM
 import Control.Applicative (Const(..))
@@ -48,6 +49,19 @@ data UpperBoundResults f a b where
     , SingI r
     ) => f r -> UpperBoundResults f a b 
 
+instance Semigroup (UpperBoundResults f a b) where
+  NonExistentUB <> _ = NonExistentUB 
+  _ <> NonExistentUB = NonExistentUB 
+  SomethingElseUB _ <> a = a
+  a <> SomethingElseUB _ = a
+  LeftUB a <> RightUB _  = SameTypeUB a
+  RightUB a <> LeftUB _  = SameTypeUB a
+  SameTypeUB a <> _      = SameTypeUB a
+  _ <> SameTypeUB a      = SameTypeUB a
+  LeftUB a <> LeftUB _   = LeftUB a
+  RightUB a <> RightUB _ = RightUB a
+  
+
 pattern SameTypeUBN ::  (a ~ b, UpperBound a b ~ Just a) => UpperBoundResults (Const ()) a b 
 pattern SameTypeUBN = SameTypeUB (Const ())
   
@@ -64,12 +78,18 @@ pattern SomethingElseUBN ::
   ) => UpperBoundResults (Const ()) a b 
 pattern SomethingElseUBN = SomethingElseUB (Const ())
 
-upcastable :: forall (a :: Types) (b :: Types) ctx. 
+upcastable 
+  :: forall 
+    (a :: Types) 
+    (b :: Types) 
+    (f   :: (Types -> Type) -> (Types -> Type) -> Type -> Types -> Type)
+    (sup :: Types -> Type)
+    (sub :: Types -> Type)
+    (ctx :: Type) . 
   ( SingI a
   , SingI b
-  , forall (a :: Types).  RValue ctx (Lazy (Lazy a)) 
-  , forall (a :: Types0). RValue ctx (Lazy (Value a)) 
-  , forall (a :: Types0). RValue ctx (Value a) 
+  , TypesCaseAnalysis (RValue (f sup sub ctx))
+  --, forall (a :: Types).  RValue (f sup sub ctx)  a
   ) => UpperBoundResults (Const ()) a b
 upcastable 
   = withSingIUBType @a @b 
@@ -81,14 +101,22 @@ upcastable
         Nothing   -> case decideEquality (sing @b) sub of
           Just Refl -> RightUBN
           Nothing   
-            -> withRVType @ctx  (sing @a)
+            -> withRVType @(f sup sub ctx)  (sing @a)
             $  rvalueIsPred @a
             $  withSingI sub 
             $  SomethingElseUBN @a @b
       SNothing  -> NonExistentUB
 
-type family UpcastX  (ctx :: Type) (a :: Types) (b :: Types) :: Type
+type family UpcastX  
+  (f   :: Types -> Type )
+  (a :: Types) 
+  :: Type
+type family UpcastCtx f     :: Type
+type family UpcastSup f     :: (Types -> Type)
+type family UpcastSub f     :: (Types -> Type)
+type family UpcastSupCtx f  :: Type
+type family UpcastSubCtx f  :: Type
 
-class Upcast ctx where
-  upcast :: forall (a :: Types) (b :: Types)
-    . UpcastX ctx a b -> E ctx a  -> UpperBoundResults (E ctx) a b
+class Upcast (f :: Types -> Type) where
+  upcast :: forall (a :: Types) (b :: Types)  
+    . SingI b => UpcastX f a  -> f a  -> UpperBoundResults f  a b
